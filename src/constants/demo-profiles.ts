@@ -9,6 +9,26 @@ export const familyVibeOptions = [
   'Calm pace',
 ];
 
+export const parentInterestOptions = [
+  'Coffee walks',
+  'Playground hangs',
+  'Museum outings',
+  'Cooking',
+  'Hiking',
+  'Board games',
+  'Baking',
+  'Fitness',
+];
+
+export const languageOptions = [
+  'Swedish',
+  'English',
+  'Arabic',
+  'French',
+  'Spanish',
+  'German',
+];
+
 export const childInterestOptions = [
   'Dinosaurs',
   'Playgrounds',

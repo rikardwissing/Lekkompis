@@ -71,7 +71,7 @@ type AppState = {
 
 const defaultDraftProfile: DraftProfile = {
   parentName: 'Anna',
-  avatarUrl: 'https://api.dicebear.com/9.x/thumbs/png?seed=Anna&size=128&backgroundColor=d1d4f9',
+  avatarUrl: 'https://randomuser.me/api/portraits/women/44.jpg',
   photoUrls: [
     'https://picsum.photos/seed/anna-playground/600/600',
     'https://picsum.photos/seed/anna-coffee/600/600',
@@ -91,7 +91,7 @@ const defaultFamilies: Family[] = [
   {
     id: 'sara',
     parentName: 'Sara',
-    avatarUrl: 'https://api.dicebear.com/9.x/thumbs/png?seed=Sara&size=128&backgroundColor=b6e3f4',
+    avatarUrl: 'https://randomuser.me/api/portraits/women/68.jpg',
     photoUrls: [
       'https://picsum.photos/seed/sara-1/600/600',
       'https://picsum.photos/seed/sara-2/600/600',
@@ -112,7 +112,7 @@ const defaultFamilies: Family[] = [
   {
     id: 'fatima',
     parentName: 'Fatima',
-    avatarUrl: 'https://api.dicebear.com/9.x/thumbs/png?seed=Fatima&size=128&backgroundColor=fde3c0',
+    avatarUrl: 'https://randomuser.me/api/portraits/women/79.jpg',
     photoUrls: [
       'https://picsum.photos/seed/fatima-1/600/600',
       'https://picsum.photos/seed/fatima-2/600/600',
@@ -133,7 +133,7 @@ const defaultFamilies: Family[] = [
   {
     id: 'johan',
     parentName: 'Johan',
-    avatarUrl: 'https://api.dicebear.com/9.x/thumbs/png?seed=Johan&size=128&backgroundColor=c0f5d8',
+    avatarUrl: 'https://randomuser.me/api/portraits/men/32.jpg',
     photoUrls: [
       'https://picsum.photos/seed/johan-1/600/600',
       'https://picsum.photos/seed/johan-2/600/600',
@@ -154,7 +154,7 @@ const defaultFamilies: Family[] = [
   {
     id: 'elin',
     parentName: 'Elin',
-    avatarUrl: 'https://api.dicebear.com/9.x/thumbs/png?seed=Elin&size=128&backgroundColor=ffd5dc',
+    avatarUrl: 'https://randomuser.me/api/portraits/women/21.jpg',
     photoUrls: [
       'https://picsum.photos/seed/elin-1/600/600',
       'https://picsum.photos/seed/elin-2/600/600',

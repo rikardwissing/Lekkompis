@@ -31,12 +31,21 @@ export default function GroupChatScreen() {
   const [selectedPhotoUrls, setSelectedPhotoUrls] = useState<string[]>([]);
   const { groupId = 'animal-zoo-sunday' } = useLocalSearchParams<{ groupId: string }>();
   const draftProfile = useAppStore((state) => state.draftProfile);
+  const families = useAppStore((state) => state.families);
   const groupPlayDates = useAppStore((state) => state.groupPlayDates);
   const groupMessagesByPlayDate = useAppStore((state) => state.groupMessagesByPlayDate);
   const sendGroupMessage = useAppStore((state) => state.sendGroupMessage);
 
   const groupPlayDate = groupPlayDates.find((entry) => entry.id === groupId) ?? groupPlayDates[0];
   const messages = useMemo(() => groupMessagesByPlayDate[groupPlayDate.id] ?? [], [groupMessagesByPlayDate, groupPlayDate.id]);
+  const avatarBySender = useMemo(
+    () =>
+      Object.fromEntries([
+        [draftProfile.parentName, draftProfile.avatarUrl],
+        ...families.map((family) => [family.parentName, family.avatarUrl]),
+      ]),
+    [draftProfile.avatarUrl, draftProfile.parentName, families]
+  );
 
   const submit = () => {
     const trimmed = draft.trim();
@@ -84,6 +93,7 @@ export default function GroupChatScreen() {
           <MessageBubble
             key={message.id}
             sender={message.sender}
+            senderAvatarUrl={avatarBySender[message.sender]}
             body={message.body}
             photoUrls={message.photoUrls}
             mine={message.sender === draftProfile.parentName}

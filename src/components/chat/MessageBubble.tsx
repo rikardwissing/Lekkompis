@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { Avatar } from '@/components/ui/Avatar';
 import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
@@ -6,22 +7,26 @@ import { spacing } from '@/theme/spacing';
 
 export function MessageBubble({
   sender,
+  senderAvatarUrl,
   body,
   photoUrls = [],
   mine = false,
 }: {
   sender: string;
+  senderAvatarUrl?: string;
   body?: string;
   photoUrls?: string[];
   mine?: boolean;
 }) {
   return (
     <View style={[styles.wrapper, mine ? styles.mineWrap : styles.theirsWrap]}>
+      {!mine ? <Avatar name={sender} imageUrl={senderAvatarUrl} size={36} /> : null}
       <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
         <Text style={styles.sender}>{sender}</Text>
         {body ? <Text style={styles.body}>{body}</Text> : null}
         {photoUrls.length > 0 ? <PhotoStrip photos={photoUrls} size={120} /> : null}
       </View>
+      {mine ? <Avatar name={sender} imageUrl={senderAvatarUrl} size={36} /> : null}
     </View>
   );
 }
@@ -29,12 +34,15 @@ export function MessageBubble({
 const styles = StyleSheet.create({
   wrapper: {
     width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.sm,
   },
   mineWrap: {
-    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
   },
   theirsWrap: {
-    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
   },
   bubble: {
     maxWidth: '84%',

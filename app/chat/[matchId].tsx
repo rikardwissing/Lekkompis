@@ -76,6 +76,7 @@ export default function ChatScreen() {
           <MessageBubble
             key={message.id}
             sender={message.sender}
+            senderAvatarUrl={message.sender === draftProfile.parentName ? draftProfile.avatarUrl : matchFamily?.avatarUrl}
             body={message.body}
             photoUrls={message.photoUrls}
             mine={message.sender === draftProfile.parentName}

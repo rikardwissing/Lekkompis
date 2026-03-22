@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
+import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
@@ -22,6 +23,7 @@ export default function FamilyDetailScreen() {
   const family = families.find((item) => item.id === id) ?? families[0];
   const isMatched = matchedFamilyIds.includes(family.id);
   const sharedInterests = family.childInterests.filter((interest) => draftProfile.childInterests.includes(interest));
+  const sharedLanguages = family.languages.filter((language) => draftProfile.languages.includes(language));
 
   return (
     <Screen scroll>
@@ -32,9 +34,22 @@ export default function FamilyDetailScreen() {
           <Text style={styles.subtitle}>{family.area}</Text>
         </View>
       </View>
+      <PhotoStrip photos={family.photoUrls} size={116} />
       <Card>
         <Text style={styles.sectionTitle}>About this family</Text>
         <Text style={styles.body}>{family.summary}</Text>
+        <Text style={styles.sectionTitle}>Parent interests</Text>
+        <View style={styles.row}>
+          {family.parentInterests.map((item) => (
+            <Chip key={item} label={item} />
+          ))}
+        </View>
+        <Text style={styles.sectionTitle}>Spoken languages</Text>
+        <View style={styles.row}>
+          {family.languages.map((item) => (
+            <Chip key={item} label={item} />
+          ))}
+        </View>
         <Text style={styles.sectionTitle}>Children</Text>
         <Text style={styles.body}>{family.childSummary} · {family.childAgeLabel}</Text>
         <Text style={styles.sectionTitle}>Why this could be a fit</Text>
@@ -48,6 +63,10 @@ export default function FamilyDetailScreen() {
         <Text style={styles.sectionTitle}>Shared interests</Text>
         <View style={styles.row}>
           {sharedInterests.length > 0 ? sharedInterests.map((item) => <Chip key={item} label={item} />) : <Chip label="Good age fit" />}
+        </View>
+        <Text style={styles.sectionTitle}>Shared languages</Text>
+        <View style={styles.row}>
+          {sharedLanguages.length > 0 ? sharedLanguages.map((item) => <Chip key={item} label={item} />) : <Chip label="English-friendly" />}
         </View>
         <Text style={styles.sectionTitle}>Availability</Text>
         <View style={styles.row}>

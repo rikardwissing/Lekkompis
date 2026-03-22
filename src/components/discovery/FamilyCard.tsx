@@ -3,17 +3,21 @@ import { Card } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
+import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
 type FamilyCardProps = {
   parentName: string;
   avatarUrl: string;
+  photoUrls: string[];
   area: string;
   summary: string;
   childSummary: string;
   childAgeLabel: string;
   childInterests: string[];
+  parentInterests: string[];
+  languages: string[];
   shared: string[];
   familyVibe: string[];
   availability: string[];
@@ -26,11 +30,14 @@ type FamilyCardProps = {
 export function FamilyCard({
   parentName,
   avatarUrl,
+  photoUrls,
   area,
   summary,
   childSummary,
   childAgeLabel,
   childInterests,
+  parentInterests,
+  languages,
   shared,
   familyVibe,
   availability,
@@ -53,11 +60,20 @@ export function FamilyCard({
         </View>
       </View>
       <Text style={styles.summary}>{summary}</Text>
+      <PhotoStrip photos={photoUrls} size={96} />
       <Text style={styles.child}>{childSummary} · {childAgeLabel}</Text>
       <View style={styles.chips}>
         {shared.map((item) => (
           <Chip key={item} label={item} />
         ))}
+      </View>
+      <View style={styles.metaBlock}>
+        <Text style={styles.metaTitle}>Parent interests</Text>
+        <Text style={styles.metaCopy}>{parentInterests.join(' · ')}</Text>
+      </View>
+      <View style={styles.metaBlock}>
+        <Text style={styles.metaTitle}>Spoken languages</Text>
+        <Text style={styles.metaCopy}>{languages.join(' · ')}</Text>
       </View>
       <View style={styles.metaBlock}>
         <Text style={styles.metaTitle}>Child interests</Text>

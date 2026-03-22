@@ -6,11 +6,14 @@ type Family = {
   id: string;
   parentName: string;
   avatarUrl: string;
+  photoUrls: string[];
   area: string;
   summary: string;
   childSummary: string;
   childAgeLabel: string;
   childInterests: string[];
+  parentInterests: string[];
+  languages: string[];
   shared: string[];
   familyVibe: string[];
   meetupNote: string;
@@ -26,9 +29,12 @@ type Message = {
 type DraftProfile = {
   parentName: string;
   avatarUrl: string;
+  photoUrls: string[];
   area: string;
   bio: string;
   familyVibe: string[];
+  parentInterests: string[];
+  languages: string[];
   childName: string;
   childAgeLabel: string;
   childInterests: string[];
@@ -50,6 +56,8 @@ type AppState = {
   discoveryFilters: DiscoveryFilters;
   updateDraftProfile: (patch: Partial<DraftProfile>) => void;
   toggleFamilyVibe: (value: string) => void;
+  toggleParentInterest: (value: string) => void;
+  toggleLanguage: (value: string) => void;
   toggleChildInterest: (value: string) => void;
   setDiscoveryArea: (area: string) => void;
   setDiscoveryAvailability: (availability: DiscoveryFilters['availability']) => void;
@@ -64,9 +72,16 @@ type AppState = {
 const defaultDraftProfile: DraftProfile = {
   parentName: 'Anna',
   avatarUrl: 'https://api.dicebear.com/9.x/thumbs/png?seed=Anna&size=128&backgroundColor=d1d4f9',
+  photoUrls: [
+    'https://picsum.photos/seed/anna-playground/600/600',
+    'https://picsum.photos/seed/anna-coffee/600/600',
+    'https://picsum.photos/seed/anna-park/600/600',
+  ],
   area: 'Vasastan',
-  bio: 'Mamma to Leo. Looking for simple weekend meetups nearby.',
+  bio: 'Mamma to Leo. Looking for simple weekend meetups nearby, and parents we would genuinely enjoy seeing again.',
   familyVibe: ['Weekend meetups', 'Public place first', 'Outdoor-friendly'],
+  parentInterests: ['Coffee walks', 'Playground hangs', 'Baking'],
+  languages: ['Swedish', 'English'],
   childName: 'Leo',
   childAgeLabel: '4 years',
   childInterests: ['Dinosaurs', 'Playgrounds', 'Drawing'],
@@ -77,11 +92,18 @@ const defaultFamilies: Family[] = [
     id: 'sara',
     parentName: 'Sara',
     avatarUrl: 'https://api.dicebear.com/9.x/thumbs/png?seed=Sara&size=128&backgroundColor=b6e3f4',
+    photoUrls: [
+      'https://picsum.photos/seed/sara-1/600/600',
+      'https://picsum.photos/seed/sara-2/600/600',
+      'https://picsum.photos/seed/sara-3/600/600',
+    ],
     area: 'Vasastan',
-    summary: 'Parent to Maja, 4. Looking for easy weekend outdoor playdates.',
+    summary: 'Parent to Maja, 4. Looking for easy weekend outdoor playdates and parent company that feels natural too.',
     childSummary: 'Maja, 4',
     childAgeLabel: '4 years',
     childInterests: ['Playgrounds', 'Drawing', 'Crafts'],
+    parentInterests: ['Coffee walks', 'Museum outings', 'Playground hangs'],
+    languages: ['Swedish', 'English'],
     shared: ['Same area', 'Playgrounds', 'Weekend meetups'],
     familyVibe: ['Warm', 'Outdoor-friendly', 'Easygoing'],
     meetupNote: 'Usually starts with a public playground meetup and coffee nearby.',
@@ -91,11 +113,18 @@ const defaultFamilies: Family[] = [
     id: 'fatima',
     parentName: 'Fatima',
     avatarUrl: 'https://api.dicebear.com/9.x/thumbs/png?seed=Fatima&size=128&backgroundColor=fde3c0',
+    photoUrls: [
+      'https://picsum.photos/seed/fatima-1/600/600',
+      'https://picsum.photos/seed/fatima-2/600/600',
+      'https://picsum.photos/seed/fatima-3/600/600',
+    ],
     area: 'Södermalm',
-    summary: 'Parent to Nora, 3. Loves calm café-and-park mornings.',
+    summary: 'Parent to Nora, 3. Loves calm café-and-park mornings and easy conversation with other international families.',
     childSummary: 'Nora, 3',
     childAgeLabel: '3 years',
     childInterests: ['Animals', 'Books', 'Playgrounds'],
+    parentInterests: ['Coffee walks', 'Cooking', 'Board games'],
+    languages: ['English', 'Arabic', 'Swedish'],
     shared: ['Animals', 'Public-place first'],
     familyVibe: ['Calm', 'Public-place first', 'Morning plans'],
     meetupNote: 'Prefers quiet first meetings and a short walk after.',
@@ -105,11 +134,18 @@ const defaultFamilies: Family[] = [
     id: 'johan',
     parentName: 'Johan',
     avatarUrl: 'https://api.dicebear.com/9.x/thumbs/png?seed=Johan&size=128&backgroundColor=c0f5d8',
+    photoUrls: [
+      'https://picsum.photos/seed/johan-1/600/600',
+      'https://picsum.photos/seed/johan-2/600/600',
+      'https://picsum.photos/seed/johan-3/600/600',
+    ],
     area: 'Vasastan',
-    summary: 'Parent to Elis, 5. Outdoor family, often free on Sundays.',
+    summary: 'Parent to Elis, 5. Outdoor family, often free on Sundays, and hoping to click with both kids and parents.',
     childSummary: 'Elis, 5',
     childAgeLabel: '5 years',
     childInterests: ['Football', 'Playgrounds', 'Animals'],
+    parentInterests: ['Hiking', 'Fitness', 'Coffee walks'],
+    languages: ['Swedish', 'English'],
     shared: ['Nearby', 'Outdoor play'],
     familyVibe: ['Energetic', 'Weekend plans', 'Playground regular'],
     meetupNote: 'Happy to meet at Vasaparken or another public playground.',
@@ -119,11 +155,18 @@ const defaultFamilies: Family[] = [
     id: 'elin',
     parentName: 'Elin',
     avatarUrl: 'https://api.dicebear.com/9.x/thumbs/png?seed=Elin&size=128&backgroundColor=ffd5dc',
+    photoUrls: [
+      'https://picsum.photos/seed/elin-1/600/600',
+      'https://picsum.photos/seed/elin-2/600/600',
+      'https://picsum.photos/seed/elin-3/600/600',
+    ],
     area: 'Östermalm',
-    summary: 'Parent to Liv, 4. New in the area and looking for local family friends.',
+    summary: 'Parent to Liv, 4. New in the area and looking for local family friends with shared parent interests too.',
     childSummary: 'Liv, 4',
     childAgeLabel: '4 years',
     childInterests: ['Drawing', 'Books', 'Crafts'],
+    parentInterests: ['Museum outings', 'Baking', 'Board games'],
+    languages: ['Swedish', 'English', 'German'],
     shared: ['Drawing', 'Similar age'],
     familyVibe: ['New in area', 'Warm', 'Weekday afternoons'],
     meetupNote: 'Often free after preschool and likes simple neighborhood meetups.',
@@ -176,6 +219,20 @@ export const useAppStore = create<AppState>((set) => ({
       draftProfile: {
         ...state.draftProfile,
         familyVibe: toggle(state.draftProfile.familyVibe, value),
+      },
+    })),
+  toggleParentInterest: (value) =>
+    set((state) => ({
+      draftProfile: {
+        ...state.draftProfile,
+        parentInterests: toggle(state.draftProfile.parentInterests, value),
+      },
+    })),
+  toggleLanguage: (value) =>
+    set((state) => ({
+      draftProfile: {
+        ...state.draftProfile,
+        languages: toggle(state.draftProfile.languages, value),
       },
     })),
   toggleChildInterest: (value) =>

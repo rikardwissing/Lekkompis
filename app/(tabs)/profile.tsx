@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
+import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
@@ -24,6 +25,22 @@ export default function ProfileScreen() {
           </View>
         </View>
         <Text style={styles.body}>{draftProfile.bio}</Text>
+        <PhotoStrip photos={draftProfile.photoUrls} size={104} />
+      </Card>
+      <Card>
+        <Text style={styles.sectionTitle}>Parent highlights</Text>
+        <Text style={styles.metaLabel}>Interests</Text>
+        <View style={styles.row}>
+          {draftProfile.parentInterests.map((interest) => (
+            <Chip key={interest} label={interest} />
+          ))}
+        </View>
+        <Text style={styles.metaLabel}>Spoken languages</Text>
+        <View style={styles.row}>
+          {draftProfile.languages.map((language) => (
+            <Chip key={language} label={language} />
+          ))}
+        </View>
       </Card>
       <Card>
         <Text style={styles.sectionTitle}>{draftProfile.childName}</Text>
@@ -68,6 +85,11 @@ const styles = StyleSheet.create({
   },
   meta: {
     fontSize: 14,
+    color: colors.textMuted,
+  },
+  metaLabel: {
+    fontSize: 13,
+    fontWeight: '700',
     color: colors.textMuted,
   },
   body: {

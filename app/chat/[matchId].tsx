@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Animated, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SubscreenHeader } from '@/components/navigation/SubscreenHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
 import { SelectableChip } from '@/components/ui/SelectableChip';
 import { Button } from '@/components/ui/Button';
 import { MessageBubble } from '@/components/chat/MessageBubble';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { suggestedReplies } from '@/constants/demo-profiles';
 import { useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
@@ -24,13 +26,43 @@ const photoReplyOptions = [
 export default function ChatScreen() {
   const [draft, setDraft] = useState('');
   const [selectedPhotoUrls, setSelectedPhotoUrls] = useState<string[]>([]);
+  const scrollY = useState(() => new Animated.Value(0))[0];
   const { matchId = 'sara-match' } = useLocalSearchParams<{ matchId: string }>();
   const draftProfile = useAppStore((state) => state.draftProfile);
   const messagesByMatch = useAppStore((state) => state.messagesByMatch);
+  const markConversationRead = useAppStore((state) => state.markConversationRead);
   const sendMessage = useAppStore((state) => state.sendMessage);
   const families = useAppStore((state) => state.families);
-  const messages = useMemo(() => messagesByMatch[matchId] ?? [], [messagesByMatch]);
   const matchFamily = families.find((family) => `${family.id}-match` === matchId);
+  const messages = useMemo(() => (matchFamily ? messagesByMatch[matchId] ?? [] : []), [matchFamily, matchId, messagesByMatch]);
+  const canSend = draft.trim().length > 0 || selectedPhotoUrls.length > 0;
+
+  useEffect(() => {
+    if (!matchFamily) {
+      return;
+    }
+
+    const lastActivityAt = messages[messages.length - 1]?.createdAt ?? Date.now();
+    markConversationRead(matchId, lastActivityAt);
+  }, [markConversationRead, matchFamily, matchId, messages]);
+  const headerTitleOpacity = scrollY.interpolate({
+    inputRange: [24, 92],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  if (!matchFamily) {
+    return (
+      <Screen header={<SubscreenHeader fallbackHref="/conversations" title="Conversation" />}>
+        <EmptyState
+          title="Chat not found"
+          body="This conversation is not available in the demo right now, so we kept you from landing in the wrong thread."
+          actionLabel="Back to conversations"
+          onAction={() => router.replace('/conversations')}
+        />
+      </Screen>
+    );
+  }
 
   const submit = () => {
     const trimmed = draft.trim();
@@ -41,15 +73,21 @@ export default function ChatScreen() {
   };
 
   return (
-    <Screen scroll>
+    <Screen
+      header={<SubscreenHeader fallbackHref="/conversations" title={matchFamily.parentName} titleOpacity={headerTitleOpacity} />}
+      scroll
+      onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+        useNativeDriver: true,
+      })}
+    >
       <View style={styles.header}>
-        <Text style={styles.title}>Chat with {matchFamily?.parentName ?? 'your match'}</Text>
-        <Text style={styles.subtitle}>{matchFamily?.meetupNote ?? 'Public-place-first · weekend playground meetup'}</Text>
+        <Text style={styles.title}>Chat with {matchFamily.parentName}</Text>
+        <Text style={styles.subtitle}>{matchFamily.meetupNote}</Text>
       </View>
       <Card>
         <View style={styles.chips}>
           {suggestedReplies.map((reply) => (
-            <SelectableChip key={reply} label={reply} selected={false} onPress={() => setDraft(reply)} />
+            <SelectableChip key={reply} label={reply} selected={draft === reply} onPress={() => setDraft(reply)} />
           ))}
         </View>
       </Card>
@@ -69,14 +107,18 @@ export default function ChatScreen() {
             />
           ))}
         </View>
-        {selectedPhotoUrls.length > 0 ? <Text style={styles.helperText}>{selectedPhotoUrls.length} photo attachment ready to send.</Text> : null}
+        {selectedPhotoUrls.length > 0 ? (
+          <Text style={styles.helperText}>
+            {selectedPhotoUrls.length} photo attachment{selectedPhotoUrls.length === 1 ? '' : 's'} ready to send.
+          </Text>
+        ) : null}
       </Card>
       <View style={styles.messages}>
         {messages.map((message) => (
           <MessageBubble
             key={message.id}
             sender={message.sender}
-            senderAvatarUrl={message.sender === draftProfile.parentName ? draftProfile.avatarUrl : matchFamily?.avatarUrl}
+            senderAvatarUrl={message.sender === draftProfile.parentName ? draftProfile.avatarUrl : matchFamily.avatarUrl}
             body={message.body}
             photoUrls={message.photoUrls}
             mine={message.sender === draftProfile.parentName}
@@ -93,7 +135,7 @@ export default function ChatScreen() {
           style={styles.input}
           multiline
         />
-        <Button label="Send" onPress={submit} />
+        <Button disabled={!canSend} label="Send" onPress={submit} />
       </Card>
     </Screen>
   );

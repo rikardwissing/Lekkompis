@@ -47,6 +47,7 @@ export function FamilyCard({
   onPressOpen,
 }: FamilyCardProps) {
   const interestedLabel = status === 'matched' ? 'Open' : status === 'liked' ? 'Pending' : 'Interested';
+  const interestedDisabled = status === 'liked';
 
   return (
     <Card>
@@ -90,7 +91,12 @@ export function FamilyCard({
       <View style={styles.actions}>
         <View style={styles.flex}><Button label="Not now" variant="secondary" onPress={onPressPass} /></View>
         <View style={styles.flex}>
-          <Button label={interestedLabel} onPress={status === 'matched' ? onPressOpen : onPressInterested} variant={status === 'liked' ? 'secondary' : 'primary'} />
+          <Button
+            disabled={interestedDisabled}
+            label={interestedLabel}
+            onPress={status === 'matched' ? onPressOpen : onPressInterested}
+            variant={status === 'liked' ? 'secondary' : 'primary'}
+          />
         </View>
       </View>
     </Card>

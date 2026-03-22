@@ -6,6 +6,7 @@ export const colors = {
   primarySoft: '#DCE9E1',
   secondary: '#7A8E9E',
   accent: '#D9C3A5',
+  accentSoft: '#F1E6D7',
   text: '#1F2A24',
   textMuted: '#66746D',
   border: '#E3E7E3',

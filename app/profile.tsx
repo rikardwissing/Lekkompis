@@ -1,4 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useRef } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
+import { SubscreenHeader } from '@/components/navigation/SubscreenHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
@@ -10,11 +12,23 @@ import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
 export default function ProfileScreen() {
+  const scrollY = useRef(new Animated.Value(0)).current;
   const draftProfile = useAppStore((state) => state.draftProfile);
   const resetDemoState = useAppStore((state) => state.resetDemoState);
+  const headerTitleOpacity = scrollY.interpolate({
+    inputRange: [24, 92],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
 
   return (
-    <Screen scroll>
+    <Screen
+      header={<SubscreenHeader fallbackHref="/(tabs)/discover" title="My family" titleOpacity={headerTitleOpacity} />}
+      scroll
+      onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+        useNativeDriver: true,
+      })}
+    >
       <Text style={styles.title}>My family</Text>
       <Card>
         <View style={styles.identity}>

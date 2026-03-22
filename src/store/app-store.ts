@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 
-type Availability = 'Weekends' | 'Weekday afternoons' | 'Flexible mornings';
+export type Availability = 'Weekends' | 'Weekday afternoons' | 'Flexible mornings';
 
-type Family = {
+export type Family = {
   id: string;
   parentName: string;
   avatarUrl: string;
@@ -20,16 +20,17 @@ type Family = {
   availability: Availability[];
 };
 
-type Message = {
+export type Message = {
   id: string;
   sender: string;
   body?: string;
   photoUrls?: string[];
+  createdAt: number;
 };
 
-type GroupPlayDateStatus = 'invited' | 'going' | 'hosting';
+export type GroupPlayDateStatus = 'invited' | 'going' | 'hosting';
 
-type GroupPlayDate = {
+export type GroupPlayDate = {
   id: string;
   title: string;
   area: string;
@@ -45,9 +46,10 @@ type GroupPlayDate = {
   attendeeFamilyIds: string[];
   invitedFamilyIds: string[];
   status: GroupPlayDateStatus;
+  createdAt: number;
 };
 
-type DraftProfile = {
+export type DraftProfile = {
   parentName: string;
   avatarUrl: string;
   photoUrls: string[];
@@ -61,18 +63,50 @@ type DraftProfile = {
   childInterests: string[];
 };
 
-type DiscoveryFilters = {
+export type DiscoveryFilters = {
   area: string;
   availability: Availability | 'Any';
   selectedInterests: string[];
 };
 
+export type CreateGroupPlayDateInput = {
+  title: string;
+  area: string;
+  locationName: string;
+  dateLabel: string;
+  timeLabel: string;
+  ageRange: string;
+  activityTags: string[];
+  vibeTags: string[];
+  note: string;
+  capacity: number;
+  invitedFamilyIds: string[];
+};
+
+export type ConversationThread = {
+  id: string;
+  kind: 'direct' | 'group';
+  title: string;
+  subtitle: string;
+  lastMessagePreview: string;
+  lastActivityAt: number;
+  route: string;
+  badgeLabel: string;
+  badgeTone: 'direct' | 'group' | 'pending';
+  avatarNames: string[];
+  avatarUrls: string[];
+  participantCount: number;
+  unreadCount: number;
+};
+
 type AppState = {
+  currentFamilyId: string;
   draftProfile: DraftProfile;
   families: Family[];
   likedFamilyIds: string[];
   passedFamilyIds: string[];
   matchedFamilyIds: string[];
+  conversationLastSeenAt: Record<string, number>;
   messagesByMatch: Record<string, Message[]>;
   groupMessagesByPlayDate: Record<string, Message[]>;
   groupPlayDates: GroupPlayDate[];
@@ -89,10 +123,24 @@ type AppState = {
   resetDemoState: () => void;
   likeFamily: (id: string) => void;
   passFamily: (id: string) => void;
+  markConversationRead: (conversationId: string, seenAt?: number) => void;
   sendMessage: (matchId: string, sender: string, body: string, photoUrls?: string[]) => void;
   sendGroupMessage: (groupId: string, sender: string, body: string, photoUrls?: string[]) => void;
   respondToGroupPlayDateInvite: (id: string, response: 'going' | 'not-going') => void;
+  createGroupPlayDate: (input: CreateGroupPlayDateInput) => string;
 };
+
+const CURRENT_FAMILY_ID = 'anna';
+const FIXTURE_START = Date.parse('2026-03-22T09:00:00Z');
+
+const atMinute = (minuteOffset: number) => FIXTURE_START + minuteOffset * 60_000;
+
+const slugify = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'group';
 
 const defaultDraftProfile: DraftProfile = {
   parentName: 'Anna',
@@ -144,7 +192,7 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/fatima-3/600/600',
     ],
     area: 'Södermalm',
-    summary: 'Parent to Nora, 3. Loves calm café-and-park mornings and easy conversation with other international families.',
+    summary: 'Parent to Nora, 3. Loves calm cafe-and-park mornings and easy conversation with other international families.',
     childSummary: 'Nora, 3',
     childAgeLabel: '3 years',
     childInterests: ['Animals', 'Books', 'Playgrounds'],
@@ -201,26 +249,48 @@ const defaultFamilies: Family[] = [
 
 const initialMessages: Record<string, Message[]> = {
   'sara-match': [
-    { id: '1', sender: 'Sara', body: 'Hej! Nice to connect. Would Saturday morning work for a playground meetup?' },
-    { id: '2', sender: 'Anna', body: 'Yes, that sounds perfect. We usually go to Vasaparken around 10.' },
+    {
+      id: '1',
+      sender: 'Sara',
+      body: 'Hej! Nice to connect. Would Saturday morning work for a playground meetup?',
+      createdAt: atMinute(6),
+    },
+    {
+      id: '2',
+      sender: 'Anna',
+      body: 'Yes, that sounds perfect. We usually go to Vasaparken around 10.',
+      createdAt: atMinute(10),
+    },
     {
       id: '3',
       sender: 'Sara',
-      body: 'Lovely — public place first works great for us too. Sharing the playground corner we usually start at.',
+      body: 'Lovely - public place first works great for us too. Sharing the playground corner we usually start at.',
       photoUrls: ['https://picsum.photos/seed/vasaparken-chat/720/480'],
+      createdAt: atMinute(13),
     },
   ],
 };
 
 const initialGroupMessages: Record<string, Message[]> = {
   'animal-zoo-sunday': [
-    { id: 'g1', sender: 'Anna', body: 'Happy this group came together. Let’s keep it simple and meet by the hill entrance.' },
-    { id: 'g2', sender: 'Sara', body: 'Perfect for us. Maja will bring her animal cards.' },
+    {
+      id: 'g1',
+      sender: 'Anna',
+      body: 'Happy this group came together. Let’s keep it simple and meet by the hill entrance.',
+      createdAt: atMinute(18),
+    },
+    {
+      id: 'g2',
+      sender: 'Sara',
+      body: 'Perfect for us. Maja will bring her animal cards.',
+      createdAt: atMinute(21),
+    },
     {
       id: 'g3',
       sender: 'Johan',
       body: 'Here is the picnic spot we usually use if the weather stays nice.',
       photoUrls: ['https://picsum.photos/seed/group-picnic-spot/720/480'],
+      createdAt: atMinute(24),
     },
   ],
   'vasaparken-saturday': [
@@ -229,6 +299,7 @@ const initialGroupMessages: Record<string, Message[]> = {
       sender: 'Sara',
       body: 'If you join, we usually start near the sand area so the kids can ease into it.',
       photoUrls: ['https://picsum.photos/seed/group-sand-area/720/480'],
+      createdAt: atMinute(8),
     },
   ],
 };
@@ -240,16 +311,17 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     area: 'Vasastan',
     locationName: 'Vasaparken playground',
     dateLabel: 'Sat 29 Mar',
-    timeLabel: '10:00–11:30',
-    ageRange: '3–5 years',
+    timeLabel: '10:00-11:30',
+    ageRange: '3-5 years',
     activityTags: ['Playgrounds', 'Scooters'],
     vibeTags: ['Public place first', 'Outdoor-friendly'],
     note: 'Sara is hosting a low-key first meetup with coffee after if the kids click.',
     capacity: 4,
     hostFamilyId: 'sara',
     attendeeFamilyIds: ['sara'],
-    invitedFamilyIds: ['anna', 'johan'],
+    invitedFamilyIds: [CURRENT_FAMILY_ID, 'johan'],
     status: 'invited',
+    createdAt: atMinute(4),
   },
   {
     id: 'animal-zoo-sunday',
@@ -257,16 +329,17 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     area: 'Vasastan',
     locationName: 'Observatorielunden',
     dateLabel: 'Sun 30 Mar',
-    timeLabel: '09:30–11:00',
-    ageRange: '4–6 years',
+    timeLabel: '09:30-11:00',
+    ageRange: '4-6 years',
     activityTags: ['Animals', 'Picnic'],
     vibeTags: ['Weekend meetups', 'Bring snacks'],
     note: 'You are hosting this one for nearby matches who enjoy easy Sunday mornings.',
     capacity: 3,
-    hostFamilyId: 'anna',
-    attendeeFamilyIds: ['anna', 'sara'],
+    hostFamilyId: CURRENT_FAMILY_ID,
+    attendeeFamilyIds: [CURRENT_FAMILY_ID, 'sara'],
     invitedFamilyIds: ['johan'],
     status: 'hosting',
+    createdAt: atMinute(16),
   },
 ];
 
@@ -279,12 +352,20 @@ const defaultDiscoveryFilters = (draftProfile: DraftProfile): DiscoveryFilters =
 const toggle = (values: string[], value: string) =>
   values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value];
 
+const defaultMatchedFamilyIds = ['sara'];
+const initialConversationLastSeenAt: Record<string, number> = {
+  'sara-match': atMinute(10),
+  'animal-zoo-sunday': atMinute(18),
+};
+
 export const useAppStore = create<AppState>((set) => ({
+  currentFamilyId: CURRENT_FAMILY_ID,
   draftProfile: defaultDraftProfile,
   families: defaultFamilies,
   likedFamilyIds: [],
   passedFamilyIds: [],
-  matchedFamilyIds: [],
+  matchedFamilyIds: defaultMatchedFamilyIds,
+  conversationLastSeenAt: initialConversationLastSeenAt,
   messagesByMatch: initialMessages,
   groupMessagesByPlayDate: initialGroupMessages,
   groupPlayDates: initialGroupPlayDates,
@@ -366,10 +447,12 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   resetDemoState: () =>
     set(() => ({
+      currentFamilyId: CURRENT_FAMILY_ID,
       draftProfile: defaultDraftProfile,
       likedFamilyIds: [],
       passedFamilyIds: [],
-      matchedFamilyIds: [],
+      matchedFamilyIds: defaultMatchedFamilyIds,
+      conversationLastSeenAt: initialConversationLastSeenAt,
       messagesByMatch: initialMessages,
       groupMessagesByPlayDate: initialGroupMessages,
       groupPlayDates: initialGroupPlayDates,
@@ -378,32 +461,60 @@ export const useAppStore = create<AppState>((set) => ({
   likeFamily: (id) =>
     set((state) => ({
       likedFamilyIds: state.likedFamilyIds.includes(id) ? state.likedFamilyIds : [...state.likedFamilyIds, id],
-      matchedFamilyIds: id === 'sara' && !state.matchedFamilyIds.includes(id) ? [...state.matchedFamilyIds, id] : state.matchedFamilyIds,
+      matchedFamilyIds:
+        id === 'sara' && !state.matchedFamilyIds.includes(id) ? [...state.matchedFamilyIds, id] : state.matchedFamilyIds,
     })),
   passFamily: (id) =>
     set((state) => ({
       passedFamilyIds: state.passedFamilyIds.includes(id) ? state.passedFamilyIds : [...state.passedFamilyIds, id],
     })),
+  markConversationRead: (conversationId, seenAt = Date.now()) =>
+    set((state) => ({
+      conversationLastSeenAt: {
+        ...state.conversationLastSeenAt,
+        [conversationId]: Math.max(state.conversationLastSeenAt[conversationId] ?? 0, seenAt),
+      },
+    })),
   sendMessage: (matchId, sender, body, photoUrls = []) =>
-    set((state) => ({
-      messagesByMatch: {
-        ...state.messagesByMatch,
-        [matchId]: [
-          ...(state.messagesByMatch[matchId] ?? []),
-          { id: `${matchId}-${Date.now()}`, sender, body, photoUrls },
-        ],
-      },
-    })),
+    set((state) => {
+      const createdAt = Date.now();
+      return {
+        conversationLastSeenAt:
+          sender === state.draftProfile.parentName
+            ? {
+                ...state.conversationLastSeenAt,
+                [matchId]: createdAt,
+              }
+            : state.conversationLastSeenAt,
+        messagesByMatch: {
+          ...state.messagesByMatch,
+          [matchId]: [
+            ...(state.messagesByMatch[matchId] ?? []),
+            { id: `${matchId}-${createdAt}`, sender, body, photoUrls, createdAt },
+          ],
+        },
+      };
+    }),
   sendGroupMessage: (groupId, sender, body, photoUrls = []) =>
-    set((state) => ({
-      groupMessagesByPlayDate: {
-        ...state.groupMessagesByPlayDate,
-        [groupId]: [
-          ...(state.groupMessagesByPlayDate[groupId] ?? []),
-          { id: `${groupId}-${Date.now()}`, sender, body, photoUrls },
-        ],
-      },
-    })),
+    set((state) => {
+      const createdAt = Date.now();
+      return {
+        conversationLastSeenAt:
+          sender === state.draftProfile.parentName
+            ? {
+                ...state.conversationLastSeenAt,
+                [groupId]: createdAt,
+              }
+            : state.conversationLastSeenAt,
+        groupMessagesByPlayDate: {
+          ...state.groupMessagesByPlayDate,
+          [groupId]: [
+            ...(state.groupMessagesByPlayDate[groupId] ?? []),
+            { id: `${groupId}-${createdAt}`, sender, body, photoUrls, createdAt },
+          ],
+        },
+      };
+    }),
   respondToGroupPlayDateInvite: (id, response) =>
     set((state) => ({
       groupPlayDates: state.groupPlayDates
@@ -419,12 +530,50 @@ export const useAppStore = create<AppState>((set) => ({
           return {
             ...groupPlayDate,
             status: 'going',
-            attendeeFamilyIds: groupPlayDate.attendeeFamilyIds.includes('anna')
+            attendeeFamilyIds: groupPlayDate.attendeeFamilyIds.includes(state.currentFamilyId)
               ? groupPlayDate.attendeeFamilyIds
-              : [...groupPlayDate.attendeeFamilyIds, 'anna'],
-            invitedFamilyIds: groupPlayDate.invitedFamilyIds.filter((familyId) => familyId !== 'anna'),
+              : [...groupPlayDate.attendeeFamilyIds, state.currentFamilyId],
+            invitedFamilyIds: groupPlayDate.invitedFamilyIds.filter((familyId) => familyId !== state.currentFamilyId),
           };
         })
         .filter((groupPlayDate): groupPlayDate is GroupPlayDate => groupPlayDate !== null),
     })),
+  createGroupPlayDate: (input) => {
+    const createdAt = Date.now();
+    const id = `${slugify(input.title)}-${createdAt}`;
+
+    set((state) => ({
+      conversationLastSeenAt: {
+        ...state.conversationLastSeenAt,
+        [id]: createdAt,
+      },
+      groupPlayDates: [
+        {
+          id,
+          title: input.title,
+          area: input.area,
+          locationName: input.locationName,
+          dateLabel: input.dateLabel,
+          timeLabel: input.timeLabel,
+          ageRange: input.ageRange,
+          activityTags: input.activityTags,
+          vibeTags: input.vibeTags,
+          note: input.note,
+          capacity: input.capacity,
+          hostFamilyId: state.currentFamilyId,
+          attendeeFamilyIds: [state.currentFamilyId],
+          invitedFamilyIds: input.invitedFamilyIds.filter((familyId) => familyId !== state.currentFamilyId),
+          status: 'hosting',
+          createdAt,
+        },
+        ...state.groupPlayDates,
+      ],
+      groupMessagesByPlayDate: {
+        ...state.groupMessagesByPlayDate,
+        [id]: [],
+      },
+    }));
+
+    return id;
+  },
 }));

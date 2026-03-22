@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { MainAppHeader } from '@/components/navigation/MainAppHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -15,6 +16,7 @@ import { spacing } from '@/theme/spacing';
 
 export default function DiscoverScreen() {
   const [showFilters, setShowFilters] = useState(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
   const families = useAppStore((state) => state.families);
   const likedFamilyIds = useAppStore((state) => state.likedFamilyIds);
   const matchedFamilyIds = useAppStore((state) => state.matchedFamilyIds);
@@ -43,14 +45,33 @@ export default function DiscoverScreen() {
       }),
     [discoveryFilters, families, passedFamilyIds]
   );
+  const activeFilterCount =
+    (discoveryFilters.area === 'All nearby' ? 0 : 1) +
+    (discoveryFilters.availability === 'Any' ? 0 : 1) +
+    discoveryFilters.selectedInterests.length;
+  const pendingCount = likedFamilyIds.filter((familyId) => !matchedFamilyIds.includes(familyId)).length;
 
-  const heroCopy = `${visibleFamilies.length} nearby families match this filter mix.`;
+  const heroCopy =
+    activeFilterCount === 0
+      ? `${visibleFamilies.length} nearby families are currently in view.`
+      : `${visibleFamilies.length} nearby families match ${activeFilterCount} active filter${activeFilterCount === 1 ? '' : 's'}.`;
+  const headerTitleOpacity = scrollY.interpolate({
+    inputRange: [24, 92],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
 
   return (
-    <Screen scroll>
+    <Screen
+      header={<MainAppHeader title="Discover" titleOpacity={headerTitleOpacity} />}
+      scroll
+      onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+        useNativeDriver: true,
+      })}
+    >
       <View style={styles.header}>
-        <Text style={styles.title}>Nearby families</Text>
-        <Text style={styles.subtitle}>iPhone-sized web preview · approximate areas only · tuned for a calm first meetup</Text>
+        <Text style={styles.title}>Discover</Text>
+        <Text style={styles.subtitle}>Nearby families, lightweight filters, and a calm first-meetup lens.</Text>
       </View>
 
       <Card>
@@ -70,6 +91,13 @@ export default function DiscoverScreen() {
             <Chip key={interest} label={interest} />
           ))}
         </View>
+        {pendingCount > 0 ? (
+          <Pressable onPress={() => router.push('/(tabs)/connections')} style={styles.connectionsLink}>
+            <Text style={styles.pendingHint}>
+              {pendingCount} family interest{pendingCount === 1 ? '' : 's'} waiting in Connections.
+            </Text>
+          </Pressable>
+        ) : null}
         {showFilters && (
           <View style={styles.filterPanel}>
             <View style={styles.filterGroup}>
@@ -120,6 +148,8 @@ export default function DiscoverScreen() {
         <EmptyState
           title="No families match these filters"
           body="Try broadening area or availability so the prototype can show more nearby families again."
+          actionLabel="Reset filters"
+          onAction={resetDiscoveryFilters}
         />
       ) : (
         visibleFamilies.map((family) => {
@@ -188,6 +218,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  pendingHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.primary,
+  },
+  connectionsLink: {
+    alignSelf: 'flex-start',
   },
   filterPanel: {
     gap: spacing.lg,

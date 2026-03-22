@@ -13,7 +13,12 @@ export function SelectableChip({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={[styles.base, selected ? styles.selected : styles.unselected]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.base, selected ? styles.selected : styles.unselected, pressed ? styles.pressed : null]}
+    >
       <Text style={[styles.text, selected ? styles.selectedText : styles.unselectedText]}>{label}</Text>
     </Pressable>
   );
@@ -37,6 +42,9 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.86,
   },
   selectedText: {
     color: colors.surface,

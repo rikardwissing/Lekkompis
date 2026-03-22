@@ -41,6 +41,27 @@ export const childInterestOptions = [
 
 export const availabilityOptions = ['Any', 'Weekends', 'Weekday afternoons', 'Flexible mornings'] as const;
 
+export const groupAgeRangeOptions = ['2-3 years', '3-5 years', '4-6 years', '5-7 years'];
+
+export const groupActivityOptions = [
+  'Playgrounds',
+  'Animals',
+  'Crafts',
+  'Scooters',
+  'Picnic',
+  'Books',
+  'Drawing',
+];
+
+export const groupVibeOptions = [
+  'Public place first',
+  'Outdoor-friendly',
+  'Weekend meetups',
+  'Bring snacks',
+  'Calm pace',
+  'Short first meetup',
+];
+
 export const suggestedReplies = [
   'Hej! Saturday morning works for us.',
   'Happy to meet at a playground first.',

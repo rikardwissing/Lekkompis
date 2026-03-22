@@ -1,14 +1,26 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 
-export function MessageBubble({ sender, body, mine = false }: { sender: string; body: string; mine?: boolean }) {
+export function MessageBubble({
+  sender,
+  body,
+  photoUrls = [],
+  mine = false,
+}: {
+  sender: string;
+  body?: string;
+  photoUrls?: string[];
+  mine?: boolean;
+}) {
   return (
     <View style={[styles.wrapper, mine ? styles.mineWrap : styles.theirsWrap]}>
       <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
         <Text style={styles.sender}>{sender}</Text>
-        <Text style={styles.body}>{body}</Text>
+        {body ? <Text style={styles.body}>{body}</Text> : null}
+        {photoUrls.length > 0 ? <PhotoStrip photos={photoUrls} size={120} /> : null}
       </View>
     </View>
   );

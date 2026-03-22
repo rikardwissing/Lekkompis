@@ -6,36 +6,42 @@ import { Card } from '@/components/ui/Card';
 import { SelectableChip } from '@/components/ui/SelectableChip';
 import { Button } from '@/components/ui/Button';
 import { MessageBubble } from '@/components/chat/MessageBubble';
-import { suggestedReplies } from '@/constants/demo-profiles';
 import { useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 
-export function generateStaticParams() {
-  return [{ matchId: 'sara-match' }];
-}
-
-const photoReplyOptions = [
-  'https://picsum.photos/seed/direct-chat-photo-1/720/480',
-  'https://picsum.photos/seed/direct-chat-photo-2/720/480',
+const suggestedGroupReplies = [
+  'We are in and should be on time.',
+  'Happy to keep this one simple and outdoors.',
+  'We can bring fruit and bubbles.',
 ];
 
-export default function ChatScreen() {
+const groupPhotoOptions = [
+  'https://picsum.photos/seed/group-chat-photo-1/720/480',
+  'https://picsum.photos/seed/group-chat-photo-2/720/480',
+];
+
+export function generateStaticParams() {
+  return [{ groupId: 'animal-zoo-sunday' }, { groupId: 'vasaparken-saturday' }];
+}
+
+export default function GroupChatScreen() {
   const [draft, setDraft] = useState('');
   const [selectedPhotoUrls, setSelectedPhotoUrls] = useState<string[]>([]);
-  const { matchId = 'sara-match' } = useLocalSearchParams<{ matchId: string }>();
+  const { groupId = 'animal-zoo-sunday' } = useLocalSearchParams<{ groupId: string }>();
   const draftProfile = useAppStore((state) => state.draftProfile);
-  const messagesByMatch = useAppStore((state) => state.messagesByMatch);
-  const sendMessage = useAppStore((state) => state.sendMessage);
-  const families = useAppStore((state) => state.families);
-  const messages = useMemo(() => messagesByMatch[matchId] ?? [], [messagesByMatch]);
-  const matchFamily = families.find((family) => `${family.id}-match` === matchId);
+  const groupPlayDates = useAppStore((state) => state.groupPlayDates);
+  const groupMessagesByPlayDate = useAppStore((state) => state.groupMessagesByPlayDate);
+  const sendGroupMessage = useAppStore((state) => state.sendGroupMessage);
+
+  const groupPlayDate = groupPlayDates.find((entry) => entry.id === groupId) ?? groupPlayDates[0];
+  const messages = useMemo(() => groupMessagesByPlayDate[groupPlayDate.id] ?? [], [groupMessagesByPlayDate, groupPlayDate.id]);
 
   const submit = () => {
     const trimmed = draft.trim();
     if (!trimmed && selectedPhotoUrls.length === 0) return;
-    sendMessage(matchId, draftProfile.parentName, trimmed, selectedPhotoUrls);
+    sendGroupMessage(groupPlayDate.id, draftProfile.parentName, trimmed, selectedPhotoUrls);
     setDraft('');
     setSelectedPhotoUrls([]);
   };
@@ -43,20 +49,22 @@ export default function ChatScreen() {
   return (
     <Screen scroll>
       <View style={styles.header}>
-        <Text style={styles.title}>Chat with {matchFamily?.parentName ?? 'your match'}</Text>
-        <Text style={styles.subtitle}>{matchFamily?.meetupNote ?? 'Public-place-first · weekend playground meetup'}</Text>
+        <Text style={styles.title}>{groupPlayDate.title}</Text>
+        <Text style={styles.subtitle}>
+          {groupPlayDate.locationName} · {groupPlayDate.dateLabel} · {groupPlayDate.timeLabel}
+        </Text>
       </View>
       <Card>
         <View style={styles.chips}>
-          {suggestedReplies.map((reply) => (
+          {suggestedGroupReplies.map((reply) => (
             <SelectableChip key={reply} label={reply} selected={false} onPress={() => setDraft(reply)} />
           ))}
         </View>
       </Card>
       <Card>
-        <Text style={styles.composerTitle}>Add a picture</Text>
+        <Text style={styles.composerTitle}>Attach a picture for the group</Text>
         <View style={styles.chips}>
-          {photoReplyOptions.map((photoUrl, index) => (
+          {groupPhotoOptions.map((photoUrl, index) => (
             <SelectableChip
               key={photoUrl}
               label={`Photo ${index + 1}`}
@@ -69,7 +77,7 @@ export default function ChatScreen() {
             />
           ))}
         </View>
-        {selectedPhotoUrls.length > 0 ? <Text style={styles.helperText}>{selectedPhotoUrls.length} photo attachment ready to send.</Text> : null}
+        <Text style={styles.helperText}>Great for sharing the meetup spot, snacks, or a stroller-friendly entrance.</Text>
       </Card>
       <View style={styles.messages}>
         {messages.map((message) => (
@@ -83,16 +91,16 @@ export default function ChatScreen() {
         ))}
       </View>
       <Card>
-        <Text style={styles.composerTitle}>Send a message</Text>
+        <Text style={styles.composerTitle}>Send to the group</Text>
         <TextInput
           value={draft}
           onChangeText={setDraft}
-          placeholder="Hej! Would Saturday morning work for you?"
+          placeholder="We can bring fruit and meet by the entrance."
           placeholderTextColor={colors.textMuted}
           style={styles.input}
           multiline
         />
-        <Button label="Send" onPress={submit} />
+        <Button label="Send to group" onPress={submit} />
       </Card>
     </Screen>
   );
@@ -103,13 +111,14 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   title: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '700',
     color: colors.text,
   },
   subtitle: {
     fontSize: 14,
     color: colors.textMuted,
+    lineHeight: 20,
   },
   chips: {
     flexDirection: 'row',

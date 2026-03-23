@@ -1,16 +1,17 @@
 import { PropsWithChildren, ReactNode } from 'react';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
-import { Animated, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { Animated, KeyboardAvoidingView, Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
 type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
   header?: ReactNode;
+  contentStyle?: StyleProp<ViewStyle>;
   onScroll?: ((event: any) => void) | undefined;
 }>;
 
-export function Screen({ children, scroll = false, header, onScroll }: ScreenProps) {
+export function Screen({ children, scroll = false, header, contentStyle, onScroll }: ScreenProps) {
   const safeAreaEdges: Edge[] = header
     ? scroll
       ? ['top', 'left', 'right']
@@ -22,6 +23,7 @@ export function Screen({ children, scroll = false, header, onScroll }: ScreenPro
         styles.content,
         scroll ? styles.scrollContent : styles.fill,
         scroll && header ? styles.scrollContentWithHeader : null,
+        contentStyle,
       ]}
     >
       {children}

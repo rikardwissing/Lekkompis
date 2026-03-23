@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Animated, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { ChatThread, type ChatToolSection } from '@/components/chat/ChatThread';
+import { buildChatRenderableItems } from '@/components/chat/chat-presenters';
 import { SubscreenHeader } from '@/components/navigation/SubscreenHeader';
-import { Screen } from '@/components/ui/Screen';
-import { Card } from '@/components/ui/Card';
-import { SelectableChip } from '@/components/ui/SelectableChip';
-import { Button } from '@/components/ui/Button';
-import { MessageBubble } from '@/components/chat/MessageBubble';
+import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Screen } from '@/components/ui/Screen';
 import { suggestedReplies } from '@/constants/demo-profiles';
 import { useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
@@ -26,7 +25,7 @@ const photoReplyOptions = [
 export default function ChatScreen() {
   const [draft, setDraft] = useState('');
   const [selectedPhotoUrls, setSelectedPhotoUrls] = useState<string[]>([]);
-  const scrollY = useState(() => new Animated.Value(0))[0];
+  const [toolsOpen, setToolsOpen] = useState(false);
   const { matchId = 'sara-match' } = useLocalSearchParams<{ matchId: string }>();
   const draftProfile = useAppStore((state) => state.draftProfile);
   const messagesByMatch = useAppStore((state) => state.messagesByMatch);
@@ -45,11 +44,45 @@ export default function ChatScreen() {
     const lastActivityAt = messages[messages.length - 1]?.createdAt ?? Date.now();
     markConversationRead(matchId, lastActivityAt);
   }, [markConversationRead, matchFamily, matchId, messages]);
-  const headerTitleOpacity = scrollY.interpolate({
-    inputRange: [24, 92],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
+
+  const chatItems = useMemo(
+    () =>
+      buildChatRenderableItems({
+        currentSenderName: draftProfile.parentName,
+        messages,
+        threadKind: 'direct',
+      }),
+    [draftProfile.parentName, messages]
+  );
+
+  const toolSections = useMemo<ChatToolSection[]>(
+    () => [
+      {
+        id: 'quick-replies',
+        title: 'Quick replies',
+        items: suggestedReplies.map((reply) => ({
+          id: reply,
+          label: reply,
+          onPress: () => setDraft(reply),
+          selected: draft === reply,
+        })),
+      },
+      {
+        id: 'photos',
+        title: 'Photos',
+        items: photoReplyOptions.map((photoUrl, index) => ({
+          id: photoUrl,
+          label: `Photo ${index + 1}`,
+          onPress: () =>
+            setSelectedPhotoUrls((current) =>
+              current.includes(photoUrl) ? current.filter((entry) => entry !== photoUrl) : [...current, photoUrl]
+            ),
+          selected: selectedPhotoUrls.includes(photoUrl),
+        })),
+      },
+    ],
+    [draft, selectedPhotoUrls]
+  );
 
   if (!matchFamily) {
     return (
@@ -66,122 +99,83 @@ export default function ChatScreen() {
 
   const submit = () => {
     const trimmed = draft.trim();
-    if (!trimmed && selectedPhotoUrls.length === 0) return;
+
+    if (!trimmed && selectedPhotoUrls.length === 0) {
+      return;
+    }
+
     sendMessage(matchId, draftProfile.parentName, trimmed, selectedPhotoUrls);
     setDraft('');
     setSelectedPhotoUrls([]);
+    setToolsOpen(false);
   };
 
   return (
     <Screen
-      header={<SubscreenHeader fallbackHref="/conversations" title={matchFamily.parentName} titleOpacity={headerTitleOpacity} />}
-      scroll
-      onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-        useNativeDriver: true,
-      })}
+      contentStyle={styles.screenContent}
+      header={<SubscreenHeader fallbackHref="/conversations" title={matchFamily.parentName} />}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>Chat with {matchFamily.parentName}</Text>
-        <Text style={styles.subtitle}>{matchFamily.meetupNote}</Text>
-      </View>
-      <Card>
-        <View style={styles.chips}>
-          {suggestedReplies.map((reply) => (
-            <SelectableChip key={reply} label={reply} selected={draft === reply} onPress={() => setDraft(reply)} />
-          ))}
-        </View>
-      </Card>
-      <Card>
-        <Text style={styles.composerTitle}>Add a picture</Text>
-        <View style={styles.chips}>
-          {photoReplyOptions.map((photoUrl, index) => (
-            <SelectableChip
-              key={photoUrl}
-              label={`Photo ${index + 1}`}
-              selected={selectedPhotoUrls.includes(photoUrl)}
-              onPress={() =>
-                setSelectedPhotoUrls((current) =>
-                  current.includes(photoUrl) ? current.filter((entry) => entry !== photoUrl) : [...current, photoUrl]
-                )
-              }
-            />
-          ))}
-        </View>
-        {selectedPhotoUrls.length > 0 ? (
-          <Text style={styles.helperText}>
-            {selectedPhotoUrls.length} photo attachment{selectedPhotoUrls.length === 1 ? '' : 's'} ready to send.
-          </Text>
-        ) : null}
-      </Card>
-      <View style={styles.messages}>
-        {messages.map((message) => (
-          <MessageBubble
-            key={message.id}
-            sender={message.sender}
-            senderAvatarUrl={message.sender === draftProfile.parentName ? draftProfile.avatarUrl : matchFamily.avatarUrl}
-            body={message.body}
-            photoUrls={message.photoUrls}
-            mine={message.sender === draftProfile.parentName}
-          />
-        ))}
-      </View>
-      <Card>
-        <Text style={styles.composerTitle}>Send a message</Text>
-        <TextInput
-          value={draft}
-          onChangeText={setDraft}
-          placeholder="Hej! Would Saturday morning work for you?"
-          placeholderTextColor={colors.textMuted}
-          style={styles.input}
-          multiline
-        />
-        <Button disabled={!canSend} label="Send" onPress={submit} />
-      </Card>
+      <ChatThread
+        attachmentSummaryLabel={
+          selectedPhotoUrls.length > 0
+            ? `${selectedPhotoUrls.length} photo${selectedPhotoUrls.length === 1 ? '' : 's'} selected`
+            : undefined
+        }
+        canSend={canSend}
+        context={
+          <View style={styles.contextStrip}>
+            <Avatar imageUrl={matchFamily.avatarUrl} name={matchFamily.parentName} size={42} />
+            <View style={styles.contextCopy}>
+              <Text style={styles.contextTitle}>{matchFamily.parentName}</Text>
+              <Text numberOfLines={2} style={styles.contextBody}>
+                {matchFamily.meetupNote}
+              </Text>
+            </View>
+          </View>
+        }
+        draft={draft}
+        items={chatItems}
+        onChangeDraft={setDraft}
+        onSend={submit}
+        onToggleTools={() => setToolsOpen((current) => !current)}
+        placeholder="Message"
+        toolSections={toolSections}
+        toolsOpen={toolsOpen}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    gap: spacing.xs,
+  screenContent: {
+    flex: 1,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    gap: 0,
   },
-  title: {
-    fontSize: 30,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-  chips: {
+  contextStrip: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  messages: {
+    alignItems: 'center',
     gap: spacing.md,
-  },
-  composerTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  helperText: {
-    fontSize: 13,
-    color: colors.textMuted,
-    lineHeight: 18,
-  },
-  input: {
-    minHeight: 100,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: 'rgba(227, 231, 227, 0.9)',
+    backgroundColor: 'rgba(255,255,255,0.86)',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    textAlignVertical: 'top',
+  },
+  contextCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  contextTitle: {
     fontSize: 15,
+    fontWeight: '700',
     color: colors.text,
+  },
+  contextBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textMuted,
   },
 });

@@ -1,13 +1,12 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Animated, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ChatThread, type ChatToolSection } from '@/components/chat/ChatThread';
+import { buildChatRenderableItems } from '@/components/chat/chat-presenters';
 import { SubscreenHeader } from '@/components/navigation/SubscreenHeader';
-import { Screen } from '@/components/ui/Screen';
-import { Card } from '@/components/ui/Card';
-import { SelectableChip } from '@/components/ui/SelectableChip';
-import { Button } from '@/components/ui/Button';
-import { MessageBubble } from '@/components/chat/MessageBubble';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Screen } from '@/components/ui/Screen';
 import { useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
@@ -31,7 +30,7 @@ export function generateStaticParams() {
 export default function GroupChatScreen() {
   const [draft, setDraft] = useState('');
   const [selectedPhotoUrls, setSelectedPhotoUrls] = useState<string[]>([]);
-  const scrollY = useState(() => new Animated.Value(0))[0];
+  const [toolsOpen, setToolsOpen] = useState(false);
   const { groupId = 'animal-zoo-sunday' } = useLocalSearchParams<{ groupId: string }>();
   const currentFamilyId = useAppStore((state) => state.currentFamilyId);
   const draftProfile = useAppStore((state) => state.draftProfile);
@@ -42,7 +41,30 @@ export default function GroupChatScreen() {
   const sendGroupMessage = useAppStore((state) => state.sendGroupMessage);
 
   const groupPlayDate = groupPlayDates.find((entry) => entry.id === groupId);
-  const messages = useMemo(() => (groupPlayDate ? groupMessagesByPlayDate[groupPlayDate.id] ?? [] : []), [groupMessagesByPlayDate, groupPlayDate]);
+  const messages = useMemo(
+    () => (groupPlayDate ? groupMessagesByPlayDate[groupPlayDate.id] ?? [] : []),
+    [groupMessagesByPlayDate, groupPlayDate]
+  );
+  const familyById = useMemo(
+    () =>
+      Object.fromEntries([
+        [
+          currentFamilyId,
+          {
+            avatarUrl: draftProfile.avatarUrl,
+            parentName: draftProfile.parentName,
+          },
+        ],
+        ...families.map((family) => [
+          family.id,
+          {
+            avatarUrl: family.avatarUrl,
+            parentName: family.parentName,
+          },
+        ]),
+      ]),
+    [currentFamilyId, draftProfile.avatarUrl, draftProfile.parentName, families]
+  );
   const avatarBySender = useMemo(
     () =>
       Object.fromEntries([
@@ -61,11 +83,46 @@ export default function GroupChatScreen() {
     const lastActivityAt = messages[messages.length - 1]?.createdAt ?? groupPlayDate.createdAt;
     markConversationRead(groupPlayDate.id, lastActivityAt);
   }, [groupPlayDate, markConversationRead, messages]);
-  const headerTitleOpacity = scrollY.interpolate({
-    inputRange: [24, 92],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
+
+  const chatItems = useMemo(
+    () =>
+      buildChatRenderableItems({
+        avatarBySender,
+        currentSenderName: draftProfile.parentName,
+        messages,
+        threadKind: 'group',
+      }),
+    [avatarBySender, draftProfile.parentName, messages]
+  );
+
+  const toolSections = useMemo<ChatToolSection[]>(
+    () => [
+      {
+        id: 'quick-replies',
+        title: 'Quick replies',
+        items: suggestedGroupReplies.map((reply) => ({
+          id: reply,
+          label: reply,
+          onPress: () => setDraft(reply),
+          selected: draft === reply,
+        })),
+      },
+      {
+        id: 'photos',
+        title: 'Photos',
+        items: groupPhotoOptions.map((photoUrl, index) => ({
+          id: photoUrl,
+          label: `Photo ${index + 1}`,
+          onPress: () =>
+            setSelectedPhotoUrls((current) =>
+              current.includes(photoUrl) ? current.filter((entry) => entry !== photoUrl) : [...current, photoUrl]
+            ),
+          selected: selectedPhotoUrls.includes(photoUrl),
+        })),
+      },
+    ],
+    [draft, selectedPhotoUrls]
+  );
 
   if (!groupPlayDate) {
     return (
@@ -82,147 +139,153 @@ export default function GroupChatScreen() {
 
   const isPendingInvite =
     groupPlayDate.status === 'invited' && groupPlayDate.invitedFamilyIds.includes(currentFamilyId);
+  const host = familyById[groupPlayDate.hostFamilyId];
 
   const submit = () => {
     const trimmed = draft.trim();
-    if (!trimmed && selectedPhotoUrls.length === 0) return;
+
+    if (!trimmed && selectedPhotoUrls.length === 0) {
+      return;
+    }
+
     sendGroupMessage(groupPlayDate.id, draftProfile.parentName, trimmed, selectedPhotoUrls);
     setDraft('');
     setSelectedPhotoUrls([]);
+    setToolsOpen(false);
   };
 
   return (
     <Screen
-      header={<SubscreenHeader fallbackHref="/conversations" title={groupPlayDate.title} titleOpacity={headerTitleOpacity} />}
-      scroll
-      onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-        useNativeDriver: true,
-      })}
+      contentStyle={styles.screenContent}
+      header={<SubscreenHeader fallbackHref="/conversations" title={groupPlayDate.title} />}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>{groupPlayDate.title}</Text>
-        <Text style={styles.subtitle}>
-          {groupPlayDate.locationName} · {groupPlayDate.dateLabel} · {groupPlayDate.timeLabel}
-        </Text>
-      </View>
-      {isPendingInvite ? (
-        <Card>
-          <Text style={styles.pendingTitle}>Invitation pending</Text>
-          <Text style={styles.helperText}>
-            You can read the thread, see who is confirmed, and message the group before you reply. Messages sent now
-            still show you as invited.
-          </Text>
-          <Button
-            label="View group details"
-            variant="secondary"
-            onPress={() => router.push({ pathname: '/group/[id]', params: { id: groupPlayDate.id } })}
-          />
-        </Card>
-      ) : null}
-      <Card>
-        <View style={styles.chips}>
-          {suggestedGroupReplies.map((reply) => (
-            <SelectableChip key={reply} label={reply} selected={draft === reply} onPress={() => setDraft(reply)} />
-          ))}
-        </View>
-      </Card>
-      <Card>
-        <Text style={styles.composerTitle}>Attach a picture for the group</Text>
-        <View style={styles.chips}>
-          {groupPhotoOptions.map((photoUrl, index) => (
-            <SelectableChip
-              key={photoUrl}
-              label={`Photo ${index + 1}`}
-              selected={selectedPhotoUrls.includes(photoUrl)}
-              onPress={() =>
-                setSelectedPhotoUrls((current) =>
-                  current.includes(photoUrl) ? current.filter((entry) => entry !== photoUrl) : [...current, photoUrl]
-                )
-              }
-            />
-          ))}
-        </View>
-        <Text style={styles.helperText}>
-          {selectedPhotoUrls.length > 0
-            ? `${selectedPhotoUrls.length} photo attachment${selectedPhotoUrls.length === 1 ? '' : 's'} ready for the group.`
-            : 'Great for sharing the meetup spot, snacks, or a stroller-friendly entrance.'}
-        </Text>
-      </Card>
-      <View style={styles.messages}>
-        {messages.map((message) => (
-          <MessageBubble
-            key={message.id}
-            sender={message.sender}
-            senderAvatarUrl={avatarBySender[message.sender]}
-            body={message.body}
-            photoUrls={message.photoUrls}
-            mine={message.sender === draftProfile.parentName}
-          />
-        ))}
-      </View>
-      <Card>
-        <Text style={styles.composerTitle}>Send to the group</Text>
-        <TextInput
-          value={draft}
-          onChangeText={setDraft}
-          placeholder="We can bring fruit and meet by the entrance."
-          placeholderTextColor={colors.textMuted}
-          style={styles.input}
-          multiline
-        />
-        <Button disabled={!canSend} label="Send to group" onPress={submit} />
-      </Card>
+      <ChatThread
+        attachmentSummaryLabel={
+          selectedPhotoUrls.length > 0
+            ? `${selectedPhotoUrls.length} photo${selectedPhotoUrls.length === 1 ? '' : 's'} selected`
+            : undefined
+        }
+        canSend={canSend}
+        context={
+          <View style={styles.contextStrip}>
+            <View style={styles.contextLine}>
+              <Ionicons color={colors.primary} name="location-outline" size={15} />
+              <Text numberOfLines={1} style={styles.contextTitle}>
+                {groupPlayDate.locationName}
+              </Text>
+            </View>
+            <View style={styles.contextMetaRow}>
+              <Text style={styles.contextMeta}>
+                {groupPlayDate.dateLabel} · {groupPlayDate.timeLabel}
+              </Text>
+              <Text style={styles.contextMeta}>Hosted by {host?.parentName ?? 'a nearby parent'}</Text>
+            </View>
+          </View>
+        }
+        draft={draft}
+        items={chatItems}
+        onChangeDraft={setDraft}
+        onSend={submit}
+        onToggleTools={() => setToolsOpen((current) => !current)}
+        placeholder="Message the group"
+        statusBanner={
+          isPendingInvite ? (
+            <View style={styles.pendingBanner}>
+              <View style={styles.pendingCopy}>
+                <Text style={styles.pendingTitle}>Invitation pending</Text>
+                <Text numberOfLines={2} style={styles.pendingBody}>
+                  You can read the thread and reply before deciding. The group still sees you as pending.
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => router.push({ pathname: '/group/[id]', params: { id: groupPlayDate.id } })}
+                style={({ pressed }) => [styles.pendingAction, pressed ? styles.pressed : null]}
+              >
+                <Text style={styles.pendingActionText}>Details</Text>
+              </Pressable>
+            </View>
+          ) : undefined
+        }
+        toolSections={toolSections}
+        toolsOpen={toolsOpen}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
+  screenContent: {
+    flex: 1,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    gap: 0,
+  },
+  contextStrip: {
+    gap: spacing.xs,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(227, 231, 227, 0.9)',
+    backgroundColor: 'rgba(255,255,255,0.86)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  contextLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.xs,
   },
-  title: {
-    fontSize: 28,
+  contextTitle: {
+    flex: 1,
+    fontSize: 15,
     fontWeight: '700',
     color: colors.text,
   },
-  subtitle: {
-    fontSize: 14,
-    color: colors.textMuted,
-    lineHeight: 20,
-  },
-  chips: {
+  contextMetaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-  messages: {
-    gap: spacing.md,
+  contextMeta: {
+    fontSize: 12,
+    color: colors.textMuted,
   },
-  composerTitle: {
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: 'rgba(241, 230, 215, 0.94)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  pendingCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  pendingTitle: {
     fontSize: 14,
     fontWeight: '700',
     color: colors.text,
   },
-  pendingTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  helperText: {
-    fontSize: 13,
+  pendingBody: {
+    fontSize: 12,
+    lineHeight: 17,
     color: colors.textMuted,
-    lineHeight: 18,
   },
-  input: {
-    minHeight: 100,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+  pendingAction: {
+    borderRadius: radius.pill,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    textAlignVertical: 'top',
-    fontSize: 15,
-    color: colors.text,
+    paddingVertical: spacing.sm,
+  },
+  pendingActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  pressed: {
+    opacity: 0.84,
   },
 });

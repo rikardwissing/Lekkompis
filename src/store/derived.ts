@@ -1,4 +1,17 @@
-import type { ChildProfile, ConversationThread, DraftProfile, Family, GroupPlayDate, Message } from '@/store/app-store';
+import {
+  ANY_PUBLIC_EVENT_AGE,
+  type ChildProfile,
+  type ConversationThread,
+  type DraftProfile,
+  type Family,
+  getActiveMatchedFamilyIds,
+  getActiveParent,
+  getDirectConversationLastSeenAtForActiveParent,
+  getPrimaryParent,
+  type GroupPlayDate,
+  type Message,
+  type PublicEventFilters,
+} from '@/store/app-store';
 import {
   formatChildBirthdayLabel,
   formatParentBirthdayLabel,
@@ -12,11 +25,18 @@ import {
 type ConversationThreadInput = {
   currentFamilyId: string;
   draftProfile: DraftProfile;
-  conversationLastSeenAt: Record<string, number>;
+  directConversationLastSeenAtByParent: Record<string, Record<string, number>>;
+  matchedFamilyIdsByParent: Record<string, string[]>;
+  groupConversationLastSeenAtByParent: Record<string, Record<string, number>>;
   families: Family[];
   messagesByMatch: Record<string, Message[]>;
   groupMessagesByPlayDate: Record<string, Message[]>;
   groupPlayDates: GroupPlayDate[];
+};
+
+type BuildConversationPreviewOptions = {
+  includeSender?: boolean;
+  senderName?: string;
 };
 
 export type BirthdayEvent = {
@@ -32,20 +52,29 @@ export type BirthdayEvent = {
 
 const unique = (values: string[]) => [...new Set(values)];
 
+const getFamilyPublicParent = (family: Family) => getPrimaryParent(family);
+
 export const buildConversationPreview = (
   message?: Message,
-  emptyMessage = 'No messages yet - open the chat to start coordinating.'
+  emptyMessage = 'No messages yet - open the chat to start coordinating.',
+  options: BuildConversationPreviewOptions = {}
 ) => {
   if (!message) {
     return emptyMessage;
   }
 
+  if (message.kind === 'event') {
+    return message.body ?? emptyMessage;
+  }
+
+  const prefix = options.includeSender && options.senderName ? `${options.senderName}: ` : '';
+
   if (message.body && message.body.trim().length > 0) {
-    return message.body;
+    return `${prefix}${message.body}`;
   }
 
   const photoCount = message.photoUrls?.length ?? 0;
-  return `Shared ${photoCount} photo${photoCount === 1 ? '' : 's'}.`;
+  return `${prefix}Shared ${photoCount} photo${photoCount === 1 ? '' : 's'}.`;
 };
 
 export const formatConversationActivity = (timestamp: number) =>
@@ -90,6 +119,7 @@ export const getFamilyChildrenSummary = (children: ChildProfile[], today = new D
   formatChildrenSummary(children, today);
 
 export const getUpcomingBirthdayEventsForFamily = (family: Family, today = new Date(), windowDays = 30) => {
+  const familyParent = getFamilyPublicParent(family);
   const childEvents = (family.children ?? []).reduce<BirthdayEvent[]>((events, child) => {
     const info = getNextBirthdayInfo(child.birthDate, today);
     const label = formatChildBirthdayLabel(child.name, child.birthDate, today);
@@ -100,7 +130,7 @@ export const getUpcomingBirthdayEventsForFamily = (family: Family, today = new D
 
     events.push({
       familyId: family.id,
-      familyName: family.parentName,
+      familyName: familyParent?.firstName ?? 'Parent',
       id: `${family.id}-${child.id}`,
       kind: 'child',
       label,
@@ -112,14 +142,16 @@ export const getUpcomingBirthdayEventsForFamily = (family: Family, today = new D
     return events;
   }, []);
 
-  const parentInfo = family.parentBirthDate ? getNextBirthdayInfo(family.parentBirthDate, today) : null;
-  const parentLabel = family.parentBirthDate ? formatParentBirthdayLabel(family.parentName, family.parentBirthDate, today) : null;
+  const parentInfo = familyParent?.birthDate ? getNextBirthdayInfo(familyParent.birthDate, today) : null;
+  const parentLabel = familyParent?.birthDate
+    ? formatParentBirthdayLabel(familyParent.firstName, familyParent.birthDate, today)
+    : null;
   const parentEvents =
     parentInfo && parentLabel && parentInfo.daysUntil <= windowDays
       ? [
           {
             familyId: family.id,
-            familyName: family.parentName,
+            familyName: familyParent.firstName,
             id: `${family.id}-parent`,
             kind: 'parent' as const,
             label: parentLabel,
@@ -143,80 +175,205 @@ export const getUpcomingBirthdayEvents = (
     .flatMap((family) => getUpcomingBirthdayEventsForFamily(family, today, windowDays))
     .sort((a, b) => a.daysUntil - b.daysUntil || a.nextDateOnly.localeCompare(b.nextDateOnly));
 
+export const isGroupFull = (groupPlayDate: GroupPlayDate) =>
+  groupPlayDate.attendeeFamilyIds.length >= groupPlayDate.capacity;
+
+export const isGroupSharedWithParent = (groupPlayDate: GroupPlayDate, parentId?: string | null) =>
+  Boolean(parentId && groupPlayDate.includedParentIds.includes(parentId));
+
+export const isGroupSharedWithActiveParent = (groupPlayDate: GroupPlayDate, draftProfile: DraftProfile) =>
+  isGroupSharedWithParent(groupPlayDate, getActiveParent(draftProfile)?.id);
+
+export const canActiveParentViewGroup = (groupPlayDate: GroupPlayDate, draftProfile: DraftProfile) =>
+  groupPlayDate.membership === 'none' || isGroupSharedWithActiveParent(groupPlayDate, draftProfile);
+
+export const getPrivateInvitations = (
+  groupPlayDates: GroupPlayDate[],
+  currentFamilyId: string,
+  draftProfile: DraftProfile
+) =>
+  groupPlayDates.filter(
+    (groupPlayDate) =>
+      isGroupSharedWithActiveParent(groupPlayDate, draftProfile) &&
+      groupPlayDate.visibility === 'private' &&
+      groupPlayDate.membership === 'invited' &&
+      groupPlayDate.invitedFamilyIds.includes(currentFamilyId)
+  );
+
+export const getHostedRequestGroups = (
+  groupPlayDates: GroupPlayDate[],
+  currentFamilyId: string,
+  draftProfile: DraftProfile
+) =>
+  groupPlayDates.filter(
+    (groupPlayDate) =>
+      isGroupSharedWithActiveParent(groupPlayDate, draftProfile) &&
+      groupPlayDate.visibility === 'public' &&
+      groupPlayDate.hostFamilyId === currentFamilyId &&
+      groupPlayDate.pendingRequestFamilyIds.length > 0
+  );
+
+export const getPendingGroupJoinRequestCount = (
+  groupPlayDates: GroupPlayDate[],
+  currentFamilyId: string,
+  draftProfile: DraftProfile
+) =>
+  getHostedRequestGroups(groupPlayDates, currentFamilyId, draftProfile).reduce(
+    (count, groupPlayDate) => count + groupPlayDate.pendingRequestFamilyIds.length,
+    0
+  );
+
+export const getGroupAttentionCount = (
+  groupPlayDates: GroupPlayDate[],
+  currentFamilyId: string,
+  draftProfile: DraftProfile
+) =>
+  getPrivateInvitations(groupPlayDates, currentFamilyId, draftProfile).length +
+  getPendingGroupJoinRequestCount(groupPlayDates, currentFamilyId, draftProfile);
+
+export const getUpcomingGroups = (groupPlayDates: GroupPlayDate[], draftProfile: DraftProfile) =>
+  groupPlayDates.filter(
+    (groupPlayDate) =>
+      isGroupSharedWithActiveParent(groupPlayDate, draftProfile) &&
+      (groupPlayDate.membership === 'hosting' || groupPlayDate.membership === 'going')
+  );
+
+export const getDiscoverablePublicEvents = ({
+  currentFamilyId,
+  filters,
+  groupPlayDates,
+}: {
+  currentFamilyId: string;
+  filters: PublicEventFilters;
+  groupPlayDates: GroupPlayDate[];
+}) =>
+  groupPlayDates.filter((groupPlayDate) => {
+    if (groupPlayDate.visibility !== 'public') return false;
+    if (groupPlayDate.hostFamilyId === currentFamilyId) return false;
+    if (groupPlayDate.membership !== 'none' && groupPlayDate.membership !== 'requested') return false;
+    if (filters.area !== 'All nearby' && groupPlayDate.area !== filters.area) return false;
+    if (filters.ageRange !== ANY_PUBLIC_EVENT_AGE && groupPlayDate.ageRange !== filters.ageRange) return false;
+    if (
+      filters.selectedActivityTags.length > 0 &&
+      !filters.selectedActivityTags.some((tag) => groupPlayDate.activityTags.includes(tag))
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
 export const getConversationThreads = ({
   currentFamilyId,
   draftProfile,
-  conversationLastSeenAt,
+  directConversationLastSeenAtByParent,
+  matchedFamilyIdsByParent,
+  groupConversationLastSeenAtByParent,
   families,
   messagesByMatch,
   groupMessagesByPlayDate,
   groupPlayDates,
 }: ConversationThreadInput): ConversationThread[] => {
+  const activeParent = getActiveParent(draftProfile);
+  const primaryParent = getPrimaryParent(draftProfile);
+  const activeMatchedFamilyIds = getActiveMatchedFamilyIds(draftProfile, matchedFamilyIdsByParent);
+  const activeDirectConversationLastSeenAt = getDirectConversationLastSeenAtForActiveParent(
+    draftProfile,
+    directConversationLastSeenAtByParent
+  );
   const familyDirectory = Object.fromEntries([
     [
       currentFamilyId,
       {
-        parentName: draftProfile.parentName,
-        avatarUrl: draftProfile.avatarUrl,
+        parentName: primaryParent?.firstName ?? 'Parent',
+        avatarUrl: primaryParent?.avatarUrl,
       },
     ],
-    ...families.map((family) => [
-      family.id,
+    ...families.map((family) => {
+      const publicParent = getFamilyPublicParent(family);
+      return [
+        family.id,
+        {
+          parentName: publicParent?.firstName ?? 'Parent',
+          avatarUrl: publicParent?.avatarUrl,
+        },
+      ] as const;
+    }),
+  ]);
+  const parentDirectory = Object.fromEntries([
+    ...draftProfile.parents.map((parent) => [
+      parent.id,
       {
-        parentName: family.parentName,
-        avatarUrl: family.avatarUrl,
+        familyId: currentFamilyId,
+        name: parent.firstName,
+        avatarUrl: parent.avatarUrl,
       },
     ]),
+    ...families.flatMap((family) =>
+      family.parents.map((parent) => [
+        parent.id,
+        {
+          familyId: family.id,
+          name: parent.firstName,
+          avatarUrl: parent.avatarUrl,
+        },
+      ])
+    ),
   ]);
 
-  const directThreads = Object.entries(messagesByMatch).reduce<ConversationThread[]>(
-    (threadsAccumulator, [matchId, messages]) => {
-      const family = families.find((entry) => `${entry.id}-match` === matchId);
+  const directThreads = Object.entries(messagesByMatch).reduce<ConversationThread[]>((threadsAccumulator, [matchId, messages]) => {
+    const family = families.find((entry) => `${entry.id}-match` === matchId);
+    const publicParent = family ? getFamilyPublicParent(family) : null;
 
-      if (!family || messages.length === 0) {
-        return threadsAccumulator;
-      }
-
-      const lastMessage = messages[messages.length - 1];
-      const lastSeenAt = conversationLastSeenAt[matchId] ?? 0;
-      const unreadCount = messages.filter(
-        (message) => message.sender !== draftProfile.parentName && message.createdAt > lastSeenAt
-      ).length;
-
-      threadsAccumulator.push({
-        id: matchId,
-        kind: 'direct',
-        title: family.parentName,
-        subtitle: `Direct chat - ${family.area}`,
-        lastMessagePreview: buildConversationPreview(lastMessage),
-        lastActivityAt: lastMessage.createdAt,
-        route: `/chat/${matchId}`,
-        badgeLabel: 'Direct',
-        badgeTone: 'direct',
-        avatarNames: [family.parentName],
-        avatarUrls: family.avatarUrl ? [family.avatarUrl] : [],
-        participantCount: 2,
-        unreadCount,
-      });
-
+    if (!family || !publicParent || messages.length === 0 || !activeMatchedFamilyIds.includes(family.id)) {
       return threadsAccumulator;
-    },
-    []
-  );
+    }
+
+    const lastMessage = messages[messages.length - 1];
+    const lastSeenAt = activeDirectConversationLastSeenAt[matchId] ?? 0;
+    const unreadCount = messages.filter(
+      (message) => message.senderParentId !== activeParent?.id && message.createdAt > lastSeenAt
+    ).length;
+
+    threadsAccumulator.push({
+      id: matchId,
+      kind: 'direct',
+      title: publicParent.firstName,
+      subtitle: `Direct chat - ${family.area}`,
+      lastMessagePreview: buildConversationPreview(lastMessage),
+      lastActivityAt: lastMessage.createdAt,
+      route: `/chat/${matchId}`,
+      badgeLabel: 'Direct',
+      badgeTone: 'direct',
+      avatarNames: [publicParent.firstName],
+      avatarUrls: publicParent.avatarUrl ? [publicParent.avatarUrl] : [],
+      participantCount: 2,
+      unreadCount,
+    });
+
+    return threadsAccumulator;
+  }, []);
 
   const groupThreads = groupPlayDates
     .filter(
       (groupPlayDate) =>
-        ((groupPlayDate.status === 'going' || groupPlayDate.status === 'hosting') &&
-          (groupPlayDate.hostFamilyId === currentFamilyId || groupPlayDate.attendeeFamilyIds.includes(currentFamilyId))) ||
-        (groupPlayDate.status === 'invited' && groupPlayDate.invitedFamilyIds.includes(currentFamilyId))
+        isGroupSharedWithActiveParent(groupPlayDate, draftProfile) &&
+        (groupPlayDate.membership === 'hosting' ||
+          groupPlayDate.membership === 'going' ||
+          (groupPlayDate.visibility === 'private' &&
+            groupPlayDate.membership === 'invited' &&
+            groupPlayDate.invitedFamilyIds.includes(currentFamilyId)))
     )
-    .map((groupPlayDate) => {
+    .map<ConversationThread>((groupPlayDate) => {
       const messages = groupMessagesByPlayDate[groupPlayDate.id] ?? [];
       const lastMessage = messages[messages.length - 1];
       const isPendingInvite =
-        groupPlayDate.status === 'invited' && groupPlayDate.invitedFamilyIds.includes(currentFamilyId);
-      const lastSeenAt = conversationLastSeenAt[groupPlayDate.id] ?? 0;
+        groupPlayDate.visibility === 'private' &&
+        groupPlayDate.membership === 'invited' &&
+        groupPlayDate.invitedFamilyIds.includes(currentFamilyId);
+      const lastSeenAt = activeParent
+        ? groupConversationLastSeenAtByParent[activeParent.id]?.[groupPlayDate.id] ?? 0
+        : 0;
       const avatarFamilyIds = [
         groupPlayDate.hostFamilyId,
         ...groupPlayDate.attendeeFamilyIds.filter((familyId) => familyId !== groupPlayDate.hostFamilyId),
@@ -227,19 +384,20 @@ export const getConversationThreads = ({
       const avatarUrls = avatarFamilyIds
         .map((familyId) => familyDirectory[familyId]?.avatarUrl)
         .filter((avatarUrl): avatarUrl is string => Boolean(avatarUrl));
-      const unreadMessageCount = messages.filter(
-        (message) => message.sender !== draftProfile.parentName && message.createdAt > lastSeenAt
-      ).length;
+      const unreadMessageCount = activeParent
+        ? messages.filter((message) => message.senderParentId !== activeParent.id && message.createdAt > lastSeenAt).length
+        : 0;
       const unreadCount =
         unreadMessageCount > 0
           ? unreadMessageCount
           : isPendingInvite && groupPlayDate.createdAt > lastSeenAt
             ? 1
             : 0;
+      const lastMessageSenderName = lastMessage ? parentDirectory[lastMessage.senderParentId]?.name : undefined;
 
       return {
         id: groupPlayDate.id,
-        kind: 'group',
+        kind: 'group' as const,
         title: groupPlayDate.title,
         subtitle: isPendingInvite
           ? `Invitation pending - ${groupPlayDate.dateLabel} - ${groupPlayDate.locationName}`
@@ -248,7 +406,11 @@ export const getConversationThreads = ({
           lastMessage,
           isPendingInvite
             ? 'Invitation pending - open the group chat to see who is confirmed before you reply.'
-            : 'No messages yet - open the group chat to start coordinating.'
+            : 'No messages yet - open the group chat to start coordinating.',
+          {
+            includeSender: Boolean(lastMessageSenderName),
+            senderName: lastMessageSenderName,
+          }
         ),
         lastActivityAt: lastMessage?.createdAt ?? groupPlayDate.createdAt,
         route: `/group-chat/${groupPlayDate.id}`,
@@ -256,11 +418,13 @@ export const getConversationThreads = ({
         badgeTone: isPendingInvite ? 'pending' : 'group',
         avatarNames,
         avatarUrls,
-        participantCount:
-          groupPlayDate.attendeeFamilyIds.length + (isPendingInvite ? 1 : 0),
+        participantCount: groupPlayDate.attendeeFamilyIds.length + (isPendingInvite ? 1 : 0),
         unreadCount,
-      } satisfies ConversationThread;
+      };
     });
 
-  return [...groupThreads, ...directThreads].sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+  return [...directThreads, ...groupThreads].sort((left, right) => right.lastActivityAt - left.lastActivityAt);
 };
+
+export const getUnreadConversationThreadCount = (threads: ConversationThread[]) =>
+  threads.filter((thread) => thread.unreadCount > 0).length;

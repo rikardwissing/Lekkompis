@@ -8,7 +8,13 @@ import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { suggestedReplies } from '@/constants/demo-profiles';
-import { useAppStore } from '@/store/app-store';
+import {
+  getActiveMatchedFamilyIds,
+  getActiveParent,
+  getLinkedParentMatchedFamilyIds,
+  getPrimaryParent,
+  useAppStore,
+} from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
@@ -29,30 +35,56 @@ export default function ChatScreen() {
   const { matchId = 'sara-match' } = useLocalSearchParams<{ matchId: string }>();
   const draftProfile = useAppStore((state) => state.draftProfile);
   const messagesByMatch = useAppStore((state) => state.messagesByMatch);
-  const markConversationRead = useAppStore((state) => state.markConversationRead);
+  const markDirectConversationRead = useAppStore((state) => state.markDirectConversationRead);
+  const matchedFamilyIdsByParent = useAppStore((state) => state.matchedFamilyIdsByParent);
   const sendMessage = useAppStore((state) => state.sendMessage);
   const families = useAppStore((state) => state.families);
   const matchFamily = families.find((family) => `${family.id}-match` === matchId);
   const messages = useMemo(() => (matchFamily ? messagesByMatch[matchId] ?? [] : []), [matchFamily, matchId, messagesByMatch]);
+  const activeParent = getActiveParent(draftProfile);
+  const matchedFamilyIds = getActiveMatchedFamilyIds(draftProfile, matchedFamilyIdsByParent);
+  const linkedParentMatchedFamilyIds = getLinkedParentMatchedFamilyIds(draftProfile, matchedFamilyIdsByParent);
+  const matchPublicParent = matchFamily ? getPrimaryParent(matchFamily) : null;
+  const canAccessDirectChat = matchFamily ? matchedFamilyIds.includes(matchFamily.id) : false;
+  const linkedParentHasConnection = matchFamily ? linkedParentMatchedFamilyIds.includes(matchFamily.id) : false;
   const canSend = draft.trim().length > 0 || selectedPhotoUrls.length > 0;
 
   useEffect(() => {
-    if (!matchFamily) {
+    if (!matchFamily || !canAccessDirectChat) {
       return;
     }
 
     const lastActivityAt = messages[messages.length - 1]?.createdAt ?? Date.now();
-    markConversationRead(matchId, lastActivityAt);
-  }, [markConversationRead, matchFamily, matchId, messages]);
+    markDirectConversationRead(matchId, lastActivityAt);
+  }, [canAccessDirectChat, markDirectConversationRead, matchFamily, matchId, messages]);
 
   const chatItems = useMemo(
     () =>
       buildChatRenderableItems({
-        currentSenderName: draftProfile.parentName,
+        currentSenderParentId: activeParent?.id ?? draftProfile.primaryParentId,
         messages,
+        senderDirectory: {
+          ...Object.fromEntries(
+            draftProfile.parents.map((parent) => [
+              parent.id,
+              {
+                avatarUrl: parent.avatarUrl,
+                name: parent.firstName,
+              },
+            ])
+          ),
+          ...(matchPublicParent
+            ? {
+                [matchPublicParent.id]: {
+                  avatarUrl: matchPublicParent.avatarUrl,
+                  name: matchPublicParent.firstName,
+                },
+              }
+            : {}),
+        },
         threadKind: 'direct',
       }),
-    [draftProfile.parentName, messages]
+    [activeParent?.id, draftProfile.parents, draftProfile.primaryParentId, matchPublicParent, messages]
   );
 
   const toolSections = useMemo<ChatToolSection[]>(
@@ -97,6 +129,23 @@ export default function ChatScreen() {
     );
   }
 
+  if (!canAccessDirectChat) {
+    return (
+      <Screen header={<SubscreenHeader fallbackHref="/conversations" title="Conversation" />}>
+        <EmptyState
+          title={linkedParentHasConnection ? 'Add this connection to your account first' : 'Direct chat not available yet'}
+          body={
+            linkedParentHasConnection
+              ? `${matchPublicParent?.firstName ?? 'This parent'} is already connected with another linked parent in your family. Add them from Connections to join the one-to-one thread as ${activeParent?.firstName ?? 'yourself'}.`
+              : 'Once you have a direct match with this parent, the conversation will open here.'
+          }
+          actionLabel="Open connections"
+          onAction={() => router.replace('/(tabs)/connections')}
+        />
+      </Screen>
+    );
+  }
+
   const submit = () => {
     const trimmed = draft.trim();
 
@@ -104,7 +153,7 @@ export default function ChatScreen() {
       return;
     }
 
-    sendMessage(matchId, draftProfile.parentName, trimmed, selectedPhotoUrls);
+    sendMessage(matchId, trimmed, selectedPhotoUrls);
     setDraft('');
     setSelectedPhotoUrls([]);
     setToolsOpen(false);
@@ -113,7 +162,7 @@ export default function ChatScreen() {
   return (
     <Screen
       contentStyle={styles.screenContent}
-      header={<SubscreenHeader fallbackHref="/conversations" title={matchFamily.parentName} />}
+      header={<SubscreenHeader fallbackHref="/conversations" title={matchPublicParent?.firstName ?? 'Conversation'} />}
     >
       <ChatThread
         attachmentSummaryLabel={
@@ -124,9 +173,9 @@ export default function ChatScreen() {
         canSend={canSend}
         context={
           <View style={styles.contextStrip}>
-            <Avatar imageUrl={matchFamily.avatarUrl} name={matchFamily.parentName} size={42} />
+            <Avatar imageUrl={matchPublicParent?.avatarUrl} name={matchPublicParent?.firstName ?? 'Parent'} size={42} />
             <View style={styles.contextCopy}>
-              <Text style={styles.contextTitle}>{matchFamily.parentName}</Text>
+              <Text style={styles.contextTitle}>{matchPublicParent?.firstName ?? 'Parent'}</Text>
               <Text numberOfLines={2} style={styles.contextBody}>
                 {matchFamily.meetupNote}
               </Text>

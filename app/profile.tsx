@@ -7,7 +7,13 @@ import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { PhotoStrip } from '@/components/ui/PhotoStrip';
-import { useAppStore } from '@/store/app-store';
+import { SelectableChip } from '@/components/ui/SelectableChip';
+import {
+  getActiveParent,
+  getPrimaryParent,
+  isPrimaryActiveParent,
+  useAppStore,
+} from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { formatAgeLabelFromBirthDate, formatDateOnly } from '@/utils/birthdays';
@@ -15,8 +21,19 @@ import { formatAgeLabelFromBirthDate, formatDateOnly } from '@/utils/birthdays';
 export default function ProfileScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const draftProfile = useAppStore((state) => state.draftProfile);
+  const coParentInvite = useAppStore((state) => state.coParentInvite);
+  const setActiveParent = useAppStore((state) => state.setActiveParent);
+  const createCoParentInvite = useAppStore((state) => state.createCoParentInvite);
+  const cancelCoParentInvite = useAppStore((state) => state.cancelCoParentInvite);
+  const acceptPendingCoParentInvite = useAppStore((state) => state.acceptPendingCoParentInvite);
+  const unlinkCoParent = useAppStore((state) => state.unlinkCoParent);
   const resetDemoState = useAppStore((state) => state.resetDemoState);
   const children = draftProfile.children ?? [];
+  const activeParent = getActiveParent(draftProfile);
+  const primaryParent = getPrimaryParent(draftProfile);
+  const primarySession = isPrimaryActiveParent(draftProfile);
+  const linkedParents = draftProfile.parents.filter((parent) => parent.status === 'active');
+  const coParent = linkedParents.find((parent) => parent.role === 'coparent');
   const headerTitleOpacity = scrollY.interpolate({
     inputRange: [24, 92],
     outputRange: [0, 1],
@@ -32,34 +49,106 @@ export default function ProfileScreen() {
       })}
     >
       <Text style={styles.title}>My family</Text>
+
       <Card>
         <View style={styles.identity}>
-          <Avatar name={draftProfile.parentName} imageUrl={draftProfile.avatarUrl} size={72} />
+          <Avatar name={activeParent?.firstName ?? 'Parent'} imageUrl={activeParent?.avatarUrl} size={72} />
           <View style={styles.identityText}>
-            <Text style={styles.name}>{draftProfile.parentName}</Text>
+            <Text style={styles.name}>{activeParent?.firstName ?? 'Parent'}</Text>
             <Text style={styles.meta}>{draftProfile.area}</Text>
+            <Text style={styles.meta}>
+              {activeParent?.role === 'primary' ? 'Primary parent session' : 'Linked co-parent session'}
+            </Text>
           </View>
         </View>
         <Text style={styles.body}>{draftProfile.bio}</Text>
         <PhotoStrip photos={draftProfile.photoUrls} size={104} />
       </Card>
+
       <Card>
-        <Text style={styles.sectionTitle}>Parent highlights</Text>
-        {draftProfile.parentBirthDate ? <Text style={styles.metaLabel}>Birthday</Text> : null}
-        {draftProfile.parentBirthDate ? <Text style={styles.meta}>{formatDateOnly(draftProfile.parentBirthDate)}</Text> : null}
+        <Text style={styles.sectionTitle}>Parent access</Text>
+        <Text style={styles.body}>
+          Shared groups, invites, hosting, and group chat stay available to both parents. Each linked parent can also build their own likes, matches, and direct chats while still seeing the other parent’s connections.
+        </Text>
+        <Text style={styles.metaLabel}>Switch active parent</Text>
+        <View style={styles.row}>
+          {linkedParents.map((parent) => (
+            <SelectableChip
+              key={parent.id}
+              label={`${parent.firstName}${parent.role === 'primary' ? ' · Primary' : ''}`}
+              selected={draftProfile.activeParentId === parent.id}
+              onPress={() => setActiveParent(parent.id)}
+            />
+          ))}
+        </View>
+      </Card>
+
+      <Card>
+        <Text style={styles.sectionTitle}>Primary parent profile</Text>
+        {primaryParent?.birthDate ? <Text style={styles.metaLabel}>Birthday</Text> : null}
+        {primaryParent?.birthDate ? <Text style={styles.meta}>{formatDateOnly(primaryParent.birthDate)}</Text> : null}
         <Text style={styles.metaLabel}>Interests</Text>
         <View style={styles.row}>
-          {draftProfile.parentInterests.map((interest) => (
+          {(primaryParent?.interests ?? []).map((interest) => (
             <Chip key={interest} label={interest} />
           ))}
         </View>
         <Text style={styles.metaLabel}>Spoken languages</Text>
         <View style={styles.row}>
-          {draftProfile.languages.map((language) => (
+          {(primaryParent?.languages ?? []).map((language) => (
             <Chip key={language} label={language} />
           ))}
         </View>
       </Card>
+
+      <Card>
+        <Text style={styles.sectionTitle}>Co-parent connection</Text>
+        <Text style={styles.body}>
+          Link a co-parent account to share group planning and let each parent build their own direct connections inside the same family account.
+        </Text>
+
+        <View style={styles.parentStack}>
+          {linkedParents.map((parent) => (
+            <View key={parent.id} style={styles.parentRow}>
+              <View style={styles.parentIdentity}>
+                <Avatar name={parent.firstName} imageUrl={parent.avatarUrl} size={44} />
+                <View style={styles.parentCopy}>
+                  <Text style={styles.parentName}>{parent.firstName}</Text>
+                  <Text style={styles.meta}>{parent.role === 'primary' ? 'Primary parent' : 'Linked co-parent'}</Text>
+                </View>
+              </View>
+              {primarySession && parent.role === 'coparent' ? (
+                <Button label="Unlink" onPress={() => unlinkCoParent(parent.id)} variant="secondary" />
+              ) : null}
+            </View>
+          ))}
+        </View>
+
+        {!coParent && !coParentInvite && primarySession ? (
+          <Button label="Generate invite code" onPress={createCoParentInvite} />
+        ) : null}
+
+        {coParentInvite ? (
+          <View style={styles.inviteCard}>
+            <Text style={styles.metaLabel}>Invite code</Text>
+            <Text style={styles.inviteCode}>{coParentInvite.code}</Text>
+            <Text style={styles.meta}>{coParentInvite.shareUrl}</Text>
+            <Text style={styles.body}>
+              This prototype uses a simulated invite flow. Accepting will add a demo co-parent account and switch the
+              session over to it.
+            </Text>
+            <View style={styles.actions}>
+              <View style={styles.flex}>
+                <Button label="Cancel invite" onPress={cancelCoParentInvite} variant="secondary" />
+              </View>
+              <View style={styles.flex}>
+                <Button label="Accept as Lukas" onPress={acceptPendingCoParentInvite} />
+              </View>
+            </View>
+          </View>
+        ) : null}
+      </Card>
+
       {children.map((child) => (
         <Card key={child.id}>
           <Text style={styles.sectionTitle}>{child.name}</Text>
@@ -73,6 +162,7 @@ export default function ProfileScreen() {
           </View>
         </Card>
       ))}
+
       <Card>
         <Text style={styles.sectionTitle}>Family vibe</Text>
         <View style={styles.row}>
@@ -81,6 +171,7 @@ export default function ProfileScreen() {
           ))}
         </View>
       </Card>
+
       <Button label="Reset demo" variant="secondary" onPress={resetDemoState} />
     </Screen>
   );
@@ -99,6 +190,7 @@ const styles = StyleSheet.create({
   },
   identityText: {
     gap: spacing.xs,
+    flex: 1,
   },
   name: {
     fontSize: 22,
@@ -128,5 +220,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  parentStack: {
+    gap: spacing.md,
+  },
+  parentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  parentIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  parentCopy: {
+    gap: spacing.xs,
+    flex: 1,
+  },
+  parentName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  inviteCard: {
+    gap: spacing.sm,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceMuted,
+    padding: spacing.md,
+  },
+  inviteCode: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 1,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  flex: {
+    flex: 1,
   },
 });

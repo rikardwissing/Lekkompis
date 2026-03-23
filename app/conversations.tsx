@@ -7,7 +7,11 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Screen } from '@/components/ui/Screen';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAppStore, type ConversationThread } from '@/store/app-store';
-import { formatConversationActivity, getConversationThreads } from '@/store/derived';
+import {
+  formatConversationActivity,
+  getConversationThreads,
+  getUnreadConversationThreadCount,
+} from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
@@ -125,7 +129,9 @@ export default function ConversationsScreen() {
   const scrollY = useState(() => new Animated.Value(0))[0];
   const currentFamilyId = useAppStore((state) => state.currentFamilyId);
   const draftProfile = useAppStore((state) => state.draftProfile);
-  const conversationLastSeenAt = useAppStore((state) => state.conversationLastSeenAt);
+  const directConversationLastSeenAtByParent = useAppStore((state) => state.directConversationLastSeenAtByParent);
+  const matchedFamilyIdsByParent = useAppStore((state) => state.matchedFamilyIdsByParent);
+  const groupConversationLastSeenAtByParent = useAppStore((state) => state.groupConversationLastSeenAtByParent);
   const families = useAppStore((state) => state.families);
   const messagesByMatch = useAppStore((state) => state.messagesByMatch);
   const groupMessagesByPlayDate = useAppStore((state) => state.groupMessagesByPlayDate);
@@ -136,16 +142,28 @@ export default function ConversationsScreen() {
       getConversationThreads({
         currentFamilyId,
         draftProfile,
-        conversationLastSeenAt,
+        directConversationLastSeenAtByParent,
+        matchedFamilyIdsByParent,
+        groupConversationLastSeenAtByParent,
         families,
         messagesByMatch,
         groupMessagesByPlayDate,
         groupPlayDates,
       }),
-    [conversationLastSeenAt, currentFamilyId, draftProfile, families, groupMessagesByPlayDate, groupPlayDates, messagesByMatch]
+    [
+      currentFamilyId,
+      directConversationLastSeenAtByParent,
+      draftProfile,
+      families,
+      groupConversationLastSeenAtByParent,
+      groupMessagesByPlayDate,
+      groupPlayDates,
+      matchedFamilyIdsByParent,
+      messagesByMatch,
+    ]
   );
 
-  const unreadThreadCount = threads.filter((thread) => thread.unreadCount > 0).length;
+  const unreadThreadCount = getUnreadConversationThreadCount(threads);
   const directThreadCount = threads.filter((thread) => thread.kind === 'direct').length;
   const groupThreadCount = threads.length - directThreadCount;
 

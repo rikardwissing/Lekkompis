@@ -80,6 +80,13 @@ export function ChatThread({
             <View style={styles.separatorRow}>
               <Text style={styles.separatorText}>{item.label}</Text>
             </View>
+          ) : item.kind === 'event' ? (
+            <View style={styles.eventRow}>
+              <View style={styles.eventPill}>
+                <Text style={styles.eventText}>{item.label}</Text>
+                <Text style={styles.eventTime}>{item.timeLabel}</Text>
+              </View>
+            </View>
           ) : (
             <MessageBubble
               avatarMode={item.avatarMode}
@@ -212,6 +219,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     overflow: 'hidden',
+  },
+  eventRow: {
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  eventPill: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accentSoft,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  eventText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  eventTime: {
+    fontSize: 11,
+    color: colors.textMuted,
   },
   composerDock: {
     gap: spacing.sm,

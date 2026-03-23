@@ -7,7 +7,7 @@ import { buildChatRenderableItems } from '@/components/chat/chat-presenters';
 import { SubscreenHeader } from '@/components/navigation/SubscreenHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
-import { useAppStore } from '@/store/app-store';
+import { getActiveParent, getPrimaryParent, useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
@@ -37,8 +37,11 @@ export default function GroupChatScreen() {
   const families = useAppStore((state) => state.families);
   const groupPlayDates = useAppStore((state) => state.groupPlayDates);
   const groupMessagesByPlayDate = useAppStore((state) => state.groupMessagesByPlayDate);
-  const markConversationRead = useAppStore((state) => state.markConversationRead);
+  const markGroupConversationRead = useAppStore((state) => state.markGroupConversationRead);
   const sendGroupMessage = useAppStore((state) => state.sendGroupMessage);
+  const activeParent = getActiveParent(draftProfile);
+  const primaryParent = getPrimaryParent(draftProfile);
+  const activeParentId = activeParent?.id ?? draftProfile.primaryParentId;
 
   const groupPlayDate = groupPlayDates.find((entry) => entry.id === groupId);
   const messages = useMemo(
@@ -51,48 +54,75 @@ export default function GroupChatScreen() {
         [
           currentFamilyId,
           {
-            avatarUrl: draftProfile.avatarUrl,
-            parentName: draftProfile.parentName,
+            avatarUrl: primaryParent?.avatarUrl,
+            parentName: primaryParent?.firstName ?? 'Parent',
           },
         ],
-        ...families.map((family) => [
-          family.id,
-          {
-            avatarUrl: family.avatarUrl,
-            parentName: family.parentName,
-          },
-        ]),
+        ...families.map((family) => {
+          const publicParent = getPrimaryParent(family);
+          return [
+            family.id,
+            {
+              avatarUrl: publicParent?.avatarUrl,
+              parentName: publicParent?.firstName ?? 'Parent',
+            },
+          ] as const;
+        }),
       ]),
-    [currentFamilyId, draftProfile.avatarUrl, draftProfile.parentName, families]
+    [currentFamilyId, families, primaryParent]
   );
-  const avatarBySender = useMemo(
+  const senderDirectory = useMemo(
     () =>
       Object.fromEntries([
-        [draftProfile.parentName, draftProfile.avatarUrl],
-        ...families.map((family) => [family.parentName, family.avatarUrl]),
+        ...draftProfile.parents.map((parent) => [
+          parent.id,
+          {
+            avatarUrl: parent.avatarUrl,
+            name: parent.firstName,
+          },
+        ]),
+        ...families.flatMap((family) =>
+          family.parents.map((parent) => [
+            parent.id,
+            {
+              avatarUrl: parent.avatarUrl,
+              name: parent.firstName,
+            },
+          ])
+        ),
       ]),
-    [draftProfile.avatarUrl, draftProfile.parentName, families]
+    [draftProfile.parents, families]
   );
   const canSend = draft.trim().length > 0 || selectedPhotoUrls.length > 0;
+  const isSharedWithActiveParent = groupPlayDate ? groupPlayDate.includedParentIds.includes(activeParentId) : false;
+  const isPendingInvite =
+    groupPlayDate?.visibility === 'private' &&
+    groupPlayDate.membership === 'invited' &&
+    groupPlayDate.invitedFamilyIds.includes(currentFamilyId);
+  const canAccessChat =
+    isSharedWithActiveParent &&
+    (groupPlayDate?.membership === 'hosting' ||
+      groupPlayDate?.membership === 'going' ||
+      isPendingInvite);
 
   useEffect(() => {
-    if (!groupPlayDate) {
+    if (!groupPlayDate || !canAccessChat) {
       return;
     }
 
     const lastActivityAt = messages[messages.length - 1]?.createdAt ?? groupPlayDate.createdAt;
-    markConversationRead(groupPlayDate.id, lastActivityAt);
-  }, [groupPlayDate, markConversationRead, messages]);
+    markGroupConversationRead(groupPlayDate.id, lastActivityAt);
+  }, [canAccessChat, groupPlayDate, markGroupConversationRead, messages]);
 
   const chatItems = useMemo(
     () =>
       buildChatRenderableItems({
-        avatarBySender,
-        currentSenderName: draftProfile.parentName,
+        currentSenderParentId: activeParent?.id ?? draftProfile.primaryParentId,
         messages,
+        senderDirectory,
         threadKind: 'group',
       }),
-    [avatarBySender, draftProfile.parentName, messages]
+    [activeParent?.id, draftProfile.primaryParentId, messages, senderDirectory]
   );
 
   const toolSections = useMemo<ChatToolSection[]>(
@@ -137,9 +167,33 @@ export default function GroupChatScreen() {
     );
   }
 
-  const isPendingInvite =
-    groupPlayDate.status === 'invited' && groupPlayDate.invitedFamilyIds.includes(currentFamilyId);
   const host = familyById[groupPlayDate.hostFamilyId];
+
+  if (groupPlayDate.membership !== 'none' && !isSharedWithActiveParent) {
+    return (
+      <Screen header={<SubscreenHeader fallbackHref="/conversations" title={groupPlayDate.title} />}>
+        <EmptyState
+          title="This chat has not been shared with this parent yet"
+          body="Another parent in your family needs to add this parent before the thread appears here."
+          actionLabel="Open event details"
+          onAction={() => router.replace({ pathname: '/group/[id]', params: { id: groupPlayDate.id } })}
+        />
+      </Screen>
+    );
+  }
+
+  if (!canAccessChat) {
+    return (
+      <Screen header={<SubscreenHeader fallbackHref="/conversations" title={groupPlayDate.title} />}>
+        <EmptyState
+          title="Chat unlocks after approval"
+          body="Public event chats open once the host approves your request. You can still review the event details in the meantime."
+          actionLabel="Open event details"
+          onAction={() => router.replace({ pathname: '/group/[id]', params: { id: groupPlayDate.id } })}
+        />
+      </Screen>
+    );
+  }
 
   const submit = () => {
     const trimmed = draft.trim();
@@ -148,7 +202,7 @@ export default function GroupChatScreen() {
       return;
     }
 
-    sendGroupMessage(groupPlayDate.id, draftProfile.parentName, trimmed, selectedPhotoUrls);
+    sendGroupMessage(groupPlayDate.id, trimmed, selectedPhotoUrls);
     setDraft('');
     setSelectedPhotoUrls([]);
     setToolsOpen(false);
@@ -168,17 +222,28 @@ export default function GroupChatScreen() {
         canSend={canSend}
         context={
           <View style={styles.contextStrip}>
-            <View style={styles.contextLine}>
-              <Ionicons color={colors.primary} name="location-outline" size={15} />
-              <Text numberOfLines={1} style={styles.contextTitle}>
-                {groupPlayDate.locationName}
-              </Text>
+            <View style={styles.contextHeaderRow}>
+              <View style={styles.contextLine}>
+                <Ionicons color={colors.primary} name="location-outline" size={15} />
+                <Text numberOfLines={1} style={styles.contextTitle}>
+                  {groupPlayDate.locationName}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityLabel="Open event details"
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/group/[id]', params: { id: groupPlayDate.id } })}
+                style={({ pressed }) => [styles.contextAction, pressed ? styles.pressed : null]}
+              >
+                <Text style={styles.contextActionText}>Open event</Text>
+              </Pressable>
             </View>
             <View style={styles.contextMetaRow}>
               <Text style={styles.contextMeta}>
                 {groupPlayDate.dateLabel} · {groupPlayDate.timeLabel}
               </Text>
               <Text style={styles.contextMeta}>Hosted by {host?.parentName ?? 'a nearby parent'}</Text>
+              {activeParent ? <Text style={styles.contextMeta}>Coordinating as {activeParent.firstName}</Text> : null}
             </View>
           </View>
         }
@@ -229,16 +294,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
   },
+  contextHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   contextLine: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    flex: 1,
   },
   contextTitle: {
     flex: 1,
     fontSize: 15,
     fontWeight: '700',
     color: colors.text,
+  },
+  contextAction: {
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  contextActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
   },
   contextMetaRow: {
     flexDirection: 'row',

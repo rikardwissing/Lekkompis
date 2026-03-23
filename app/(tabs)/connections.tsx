@@ -7,7 +7,14 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { useAppStore } from '@/store/app-store';
+import {
+  getActiveLikedFamilyIds,
+  getActiveMatchedFamilyIds,
+  getActiveParent,
+  getLinkedParentMatchedFamilyIds,
+  getPrimaryParent,
+  useAppStore,
+} from '@/store/app-store';
 import {
   getConversationThreads,
   getMatchedFamilies,
@@ -21,13 +28,19 @@ export default function ConnectionsScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const currentFamilyId = useAppStore((state) => state.currentFamilyId);
   const draftProfile = useAppStore((state) => state.draftProfile);
-  const conversationLastSeenAt = useAppStore((state) => state.conversationLastSeenAt);
-  const matchedFamilyIds = useAppStore((state) => state.matchedFamilyIds);
-  const likedFamilyIds = useAppStore((state) => state.likedFamilyIds);
+  const directConversationLastSeenAtByParent = useAppStore((state) => state.directConversationLastSeenAtByParent);
+  const groupConversationLastSeenAtByParent = useAppStore((state) => state.groupConversationLastSeenAtByParent);
+  const matchedFamilyIdsByParent = useAppStore((state) => state.matchedFamilyIdsByParent);
+  const likedFamilyIdsByParent = useAppStore((state) => state.likedFamilyIdsByParent);
   const families = useAppStore((state) => state.families);
   const messagesByMatch = useAppStore((state) => state.messagesByMatch);
   const groupMessagesByPlayDate = useAppStore((state) => state.groupMessagesByPlayDate);
   const groupPlayDates = useAppStore((state) => state.groupPlayDates);
+  const likeFamily = useAppStore((state) => state.likeFamily);
+  const activeParent = getActiveParent(draftProfile);
+  const matchedFamilyIds = getActiveMatchedFamilyIds(draftProfile, matchedFamilyIdsByParent);
+  const likedFamilyIds = getActiveLikedFamilyIds(draftProfile, likedFamilyIdsByParent);
+  const linkedParentMatchedFamilyIds = getLinkedParentMatchedFamilyIds(draftProfile, matchedFamilyIdsByParent);
 
   const matchedFamilies = useMemo(
     () => getMatchedFamilies(families, matchedFamilyIds),
@@ -42,13 +55,46 @@ export default function ConnectionsScreen() {
       getConversationThreads({
         currentFamilyId,
         draftProfile,
-        conversationLastSeenAt,
+        directConversationLastSeenAtByParent,
+        matchedFamilyIdsByParent,
+        groupConversationLastSeenAtByParent,
         families,
         messagesByMatch,
         groupMessagesByPlayDate,
         groupPlayDates,
       }),
-    [conversationLastSeenAt, currentFamilyId, draftProfile, families, groupMessagesByPlayDate, groupPlayDates, messagesByMatch]
+    [
+      currentFamilyId,
+      directConversationLastSeenAtByParent,
+      draftProfile,
+      families,
+      groupConversationLastSeenAtByParent,
+      groupMessagesByPlayDate,
+      groupPlayDates,
+      matchedFamilyIdsByParent,
+      messagesByMatch,
+    ]
+  );
+  const linkedConnectionFamilies = useMemo(
+    () =>
+      getMatchedFamilies(families, linkedParentMatchedFamilyIds).filter(
+        (family) => !matchedFamilyIds.includes(family.id)
+      ),
+    [families, linkedParentMatchedFamilyIds, matchedFamilyIds]
+  );
+  const linkedOwnerNamesByFamilyId = useMemo(
+    () =>
+      Object.fromEntries(
+        linkedConnectionFamilies.map((family) => {
+          const ownerNames = draftProfile.parents
+            .filter((parent) => parent.status === 'active' && parent.id !== activeParent?.id)
+            .filter((parent) => (matchedFamilyIdsByParent[parent.id] ?? []).includes(family.id))
+            .map((parent) => parent.firstName);
+
+          return [family.id, ownerNames];
+        })
+      ),
+    [activeParent?.id, draftProfile.parents, linkedConnectionFamilies, matchedFamilyIdsByParent]
   );
   const headerTitleOpacity = scrollY.interpolate({
     inputRange: [24, 92],
@@ -66,7 +112,9 @@ export default function ConnectionsScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.title}>Connections</Text>
-        <Text style={styles.subtitle}>Mutual matches and pending interest stay separate from active conversations.</Text>
+        <Text style={styles.subtitle}>
+          Mutual matches and pending interest stay separate from active conversations. You can also pull another linked parent’s connections into your own account.
+        </Text>
       </View>
 
       <View style={styles.sectionBlock}>
@@ -74,15 +122,16 @@ export default function ConnectionsScreen() {
         {matchedFamilies.length > 0 ? (
           <View style={styles.stack}>
             {matchedFamilies.map((family) => {
+              const publicParent = getPrimaryParent(family);
               const hasThread = threads.some((thread) => thread.route === `/chat/${family.id}-match`);
               const familyBirthdayNote = getUpcomingBirthdayEventsForFamily(family)[0]?.label;
 
               return (
                 <Card key={family.id}>
                   <View style={styles.identity}>
-                    <Avatar name={family.parentName} imageUrl={family.avatarUrl} />
+                    <Avatar name={publicParent?.firstName ?? 'Parent'} imageUrl={publicParent?.avatarUrl} />
                     <View style={styles.identityText}>
-                      <Text style={styles.cardTitle}>{family.parentName}</Text>
+                      <Text style={styles.cardTitle}>{publicParent?.firstName ?? 'Parent'}</Text>
                       <Text style={styles.body}>
                         Mutual match in {family.area}. {family.meetupNote}
                       </Text>
@@ -107,18 +156,54 @@ export default function ConnectionsScreen() {
         )}
       </View>
 
+      {linkedConnectionFamilies.length > 0 ? (
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionTitle}>Linked parent connections</Text>
+          <View style={styles.stack}>
+            {linkedConnectionFamilies.map((family) => {
+              const publicParent = getPrimaryParent(family);
+              const ownerNames = linkedOwnerNamesByFamilyId[family.id] ?? [];
+              const ownerLabel =
+                ownerNames.length === 1
+                  ? ownerNames[0]
+                  : ownerNames.length > 1
+                    ? `${ownerNames.slice(0, -1).join(', ')} and ${ownerNames[ownerNames.length - 1]}`
+                    : 'another parent';
+
+              return (
+                <Card key={`linked-${family.id}`}>
+                  <View style={styles.identity}>
+                    <Avatar name={publicParent?.firstName ?? 'Parent'} imageUrl={publicParent?.avatarUrl} />
+                    <View style={styles.identityText}>
+                      <Text style={styles.cardTitle}>{publicParent?.firstName ?? 'Parent'}</Text>
+                      <Text style={styles.body}>
+                        Already connected by {ownerLabel}. Add this parent to your own account to join the direct thread as {activeParent?.firstName ?? 'yourself'}.
+                      </Text>
+                    </View>
+                  </View>
+                  <Button label="Add to my account" onPress={() => likeFamily(family.id)} />
+                </Card>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
       {pendingFamilies.length > 0 ? (
         <Card>
           <Text style={styles.sectionTitle}>Pending interest</Text>
           <View style={styles.pendingList}>
-            {pendingFamilies.map((family) => (
-              <View key={family.id} style={styles.pendingRow}>
-                <Avatar name={family.parentName} imageUrl={family.avatarUrl} size={40} />
+            {pendingFamilies.map((family) => {
+              const publicParent = getPrimaryParent(family);
+              return (
+                <View key={family.id} style={styles.pendingRow}>
+                  <Avatar name={publicParent?.firstName ?? 'Parent'} imageUrl={publicParent?.avatarUrl} size={40} />
                 <Text style={styles.pendingItem}>
-                  {family.parentName} in {family.area}
+                    {publicParent?.firstName ?? 'Parent'} in {family.area}
                 </Text>
               </View>
-            ))}
+              );
+            })}
           </View>
         </Card>
       ) : null}

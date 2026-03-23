@@ -2,18 +2,24 @@ import { useRef } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { SubscreenHeader } from '@/components/navigation/SubscreenHeader';
-import { Screen } from '@/components/ui/Screen';
-import { Card } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { useAppStore } from '@/store/app-store';
+import { Screen } from '@/components/ui/Screen';
+import { getActiveParent, getPrimaryParent, useAppStore } from '@/store/app-store';
+import { canActiveParentViewGroup, isGroupFull } from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
 export function generateStaticParams() {
-  return [{ id: 'animal-zoo-sunday' }, { id: 'vasaparken-saturday' }];
+  return [
+    { id: 'animal-zoo-sunday' },
+    { id: 'vasaparken-saturday' },
+    { id: 'story-garden-sunday' },
+    { id: 'museum-crafts-saturday' },
+  ];
 }
 
 export default function GroupDetailScreen() {
@@ -24,6 +30,12 @@ export default function GroupDetailScreen() {
   const families = useAppStore((state) => state.families);
   const groupPlayDates = useAppStore((state) => state.groupPlayDates);
   const respondToGroupPlayDateInvite = useAppStore((state) => state.respondToGroupPlayDateInvite);
+  const addLinkedParentToGroup = useAppStore((state) => state.addLinkedParentToGroup);
+  const requestToJoinGroupPlayDate = useAppStore((state) => state.requestToJoinGroupPlayDate);
+  const approveGroupJoinRequest = useAppStore((state) => state.approveGroupJoinRequest);
+  const declineGroupJoinRequest = useAppStore((state) => state.declineGroupJoinRequest);
+  const activeParent = getActiveParent(draftProfile);
+  const primaryParent = getPrimaryParent(draftProfile);
 
   const groupPlayDate = groupPlayDates.find((entry) => entry.id === id);
   const headerTitleOpacity = scrollY.interpolate({
@@ -45,42 +57,85 @@ export default function GroupDetailScreen() {
     );
   }
 
+  if (!canActiveParentViewGroup(groupPlayDate, draftProfile)) {
+    return (
+      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/groups" title="Group" />}>
+        <EmptyState
+          title="This group has not been shared with this parent yet"
+          body="Another parent in your family needs to add this parent before the event and chat show up here."
+          actionLabel="Back to groups"
+          onAction={() => router.replace('/(tabs)/groups')}
+        />
+      </Screen>
+    );
+  }
+
   const familyById = Object.fromEntries([
     [
       currentFamilyId,
       {
-        parentName: draftProfile.parentName,
-        avatarUrl: draftProfile.avatarUrl,
+        parentName: primaryParent?.firstName ?? 'Parent',
+        avatarUrl: primaryParent?.avatarUrl,
       },
     ],
-    ...families.map((family) => [
-      family.id,
-      {
-        parentName: family.parentName,
-        avatarUrl: family.avatarUrl,
-      },
-    ]),
+    ...families.map((family) => {
+      const publicParent = getPrimaryParent(family);
+      return [
+        family.id,
+        {
+          parentName: publicParent?.firstName ?? 'Parent',
+          avatarUrl: publicParent?.avatarUrl,
+        },
+      ] as const;
+    }),
   ]);
+  const toFamilyList = (familyIds: string[]) =>
+    familyIds.flatMap((familyId) => {
+      const family = familyById[familyId];
 
-  const attendees = groupPlayDate.attendeeFamilyIds
-    .map((familyId) => ({
-      id: familyId,
-      ...familyById[familyId],
-    }))
-    .filter((family): family is { id: string; parentName: string; avatarUrl?: string } => Boolean(family?.parentName));
+      return family?.parentName
+        ? [
+            {
+              id: familyId,
+              parentName: family.parentName,
+              avatarUrl: family.avatarUrl,
+            },
+          ]
+        : [];
+    });
 
-  const pendingInvitees = groupPlayDate.invitedFamilyIds
-    .filter((familyId) => familyId !== currentFamilyId)
-    .map((familyId) => ({
-      id: familyId,
-      ...familyById[familyId],
-    }))
-    .filter((family): family is { id: string; parentName: string; avatarUrl?: string } => Boolean(family?.parentName));
+  const attendees = toFamilyList(groupPlayDate.attendeeFamilyIds);
+  const pendingInvitees = toFamilyList(groupPlayDate.invitedFamilyIds.filter((familyId) => familyId !== currentFamilyId));
+  const requesters = toFamilyList(groupPlayDate.pendingRequestFamilyIds);
 
   const host = familyById[groupPlayDate.hostFamilyId];
-  const isPendingInvite =
-    groupPlayDate.status === 'invited' && groupPlayDate.invitedFamilyIds.includes(currentFamilyId);
-  const statusLabel = isPendingInvite ? 'Invitation pending' : groupPlayDate.status === 'hosting' ? 'Hosting' : 'Going';
+  const activeParentId = activeParent?.id ?? draftProfile.primaryParentId;
+  const activeLinkedParents = draftProfile.parents.filter((parent) => parent.status === 'active');
+  const includedParents = activeLinkedParents.filter((parent) => groupPlayDate.includedParentIds.includes(parent.id));
+  const isHost = groupPlayDate.membership === 'hosting';
+  const isPrivateInvite = groupPlayDate.visibility === 'private' && groupPlayDate.membership === 'invited';
+  const isRequestedPublic = groupPlayDate.visibility === 'public' && groupPlayDate.membership === 'requested';
+  const isPublicNonMember = groupPlayDate.visibility === 'public' && groupPlayDate.membership === 'none';
+  const canAccessChat =
+    groupPlayDate.membership === 'hosting' ||
+    groupPlayDate.membership === 'going' ||
+    (groupPlayDate.visibility === 'private' && groupPlayDate.membership === 'invited');
+  const shareableParents = activeLinkedParents.filter(
+    (parent) => parent.id !== activeParentId && !groupPlayDate.includedParentIds.includes(parent.id)
+  );
+  const statusLabel =
+    groupPlayDate.membership === 'hosting'
+      ? 'Hosting'
+      : groupPlayDate.membership === 'going'
+        ? 'Going'
+        : isPrivateInvite
+          ? 'Invitation pending'
+          : isRequestedPublic
+            ? 'Request sent'
+            : groupPlayDate.visibility === 'public'
+              ? 'Public event'
+              : 'Invite-only';
+  const full = isGroupFull(groupPlayDate);
 
   return (
     <Screen
@@ -105,10 +160,12 @@ export default function GroupDetailScreen() {
             <Text style={styles.body}>
               {groupPlayDate.area} · {groupPlayDate.ageRange}
             </Text>
+            {activeParent ? <Text style={styles.body}>Coordinating as {activeParent.firstName}</Text> : null}
           </View>
         </View>
         <View style={styles.filters}>
           <Chip label={statusLabel} />
+          <Chip label={groupPlayDate.visibility === 'public' ? 'Public' : 'Invite-only'} />
           <Chip label={`${groupPlayDate.attendeeFamilyIds.length}/${groupPlayDate.capacity} families`} />
           {groupPlayDate.activityTags.map((tag) => (
             <Chip key={tag} label={tag} />
@@ -117,19 +174,31 @@ export default function GroupDetailScreen() {
             <Chip key={tag} label={tag} />
           ))}
         </View>
-        {isPendingInvite ? (
+        {isPrivateInvite ? (
           <Text style={styles.pendingCopy}>
-            You can see who is confirmed and read the group chat before you decide. If you send a message now, the group
-            will still see you as pending.
+            You can read the group chat before deciding. You will stay marked as pending until you accept the invite.
+          </Text>
+        ) : null}
+        {isRequestedPublic ? (
+          <Text style={styles.pendingCopy}>
+            Your join request is waiting on host approval. You will move into the event and group chat once the host accepts it.
+          </Text>
+        ) : null}
+        {isPublicNonMember ? (
+          <Text style={styles.pendingCopy}>
+            This is a public event. Request to join and the host can approve you if there is still room.
           </Text>
         ) : null}
         <Text style={styles.body}>{groupPlayDate.note}</Text>
         <View style={styles.actionStack}>
-          <Button
-            label="Open group chat"
-            onPress={() => router.push({ pathname: '/group-chat/[groupId]', params: { groupId: groupPlayDate.id } })}
-          />
-          {isPendingInvite ? (
+          {canAccessChat ? (
+            <Button
+              label="Open group chat"
+              onPress={() => router.push({ pathname: '/group-chat/[groupId]', params: { groupId: groupPlayDate.id } })}
+            />
+          ) : null}
+
+          {isPrivateInvite ? (
             <View style={styles.inlineActions}>
               <View style={styles.flex}>
                 <Button
@@ -146,8 +215,77 @@ export default function GroupDetailScreen() {
               </View>
             </View>
           ) : null}
+
+          {isPublicNonMember ? (
+            <Button
+              disabled={full}
+              label={full ? 'Full' : 'Request to join'}
+              onPress={() => requestToJoinGroupPlayDate(groupPlayDate.id)}
+            />
+          ) : null}
+
+          {isRequestedPublic ? <Button disabled label="Request sent" variant="secondary" onPress={() => undefined} /> : null}
         </View>
       </Card>
+
+      {activeLinkedParents.length > 1 && canAccessChat ? (
+        <Card>
+          <Text style={styles.sectionTitle}>Shared with family</Text>
+          <Text style={styles.body}>
+            Groups stay with the parent who joined until they explicitly add another linked parent.
+          </Text>
+          <View style={styles.filters}>
+            {includedParents.map((parent) => (
+              <Chip key={parent.id} label={parent.firstName} />
+            ))}
+          </View>
+          {shareableParents.length > 0 ? (
+            <View style={styles.shareActions}>
+              {shareableParents.map((parent) => (
+                <Button
+                  key={parent.id}
+                  label={`Add ${parent.firstName}`}
+                  onPress={() => addLinkedParentToGroup(groupPlayDate.id, parent.id)}
+                  variant="secondary"
+                />
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.attendeeMeta}>All active parents in your family already have access to this group.</Text>
+          )}
+        </Card>
+      ) : null}
+
+      {isHost && groupPlayDate.visibility === 'public' && requesters.length > 0 ? (
+        <Card>
+          <Text style={styles.sectionTitle}>Join requests</Text>
+          <View style={styles.requestList}>
+            {requesters.map((requester) => (
+              <View key={requester.id} style={styles.requestRow}>
+                <View style={styles.attendeeRow}>
+                  <Avatar name={requester.parentName} imageUrl={requester.avatarUrl} size={40} />
+                  <View style={styles.attendeeText}>
+                    <Text style={styles.attendeeName}>{requester.parentName}</Text>
+                    <Text style={styles.attendeeMeta}>Requested to join this public event</Text>
+                  </View>
+                </View>
+                <View style={styles.inlineActions}>
+                  <View style={styles.flex}>
+                    <Button
+                      label="Decline"
+                      variant="secondary"
+                      onPress={() => declineGroupJoinRequest(groupPlayDate.id, requester.id)}
+                    />
+                  </View>
+                  <View style={styles.flex}>
+                    <Button label="Approve" onPress={() => approveGroupJoinRequest(groupPlayDate.id, requester.id)} />
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        </Card>
+      ) : null}
 
       <Card>
         <Text style={styles.sectionTitle}>Who is coming</Text>
@@ -164,7 +302,7 @@ export default function GroupDetailScreen() {
         </View>
       </Card>
 
-      {pendingInvitees.length > 0 && (
+      {groupPlayDate.visibility === 'private' && pendingInvitees.length > 0 ? (
         <Card>
           <Text style={styles.sectionTitle}>Waiting on replies</Text>
           <View style={styles.attendeeList}>
@@ -179,8 +317,7 @@ export default function GroupDetailScreen() {
             ))}
           </View>
         </Card>
-      )}
-
+      ) : null}
     </Screen>
   );
 }
@@ -257,5 +394,14 @@ const styles = StyleSheet.create({
   attendeeMeta: {
     fontSize: 13,
     color: colors.textMuted,
+  },
+  requestList: {
+    gap: spacing.md,
+  },
+  requestRow: {
+    gap: spacing.md,
+  },
+  shareActions: {
+    gap: spacing.sm,
   },
 });

@@ -8,6 +8,13 @@ export type ChatDateSeparatorItem = {
   label: string;
 };
 
+export type ChatEventItem = {
+  id: string;
+  kind: 'event';
+  label: string;
+  timeLabel: string;
+};
+
 export type ChatMessageItem = {
   avatarMode: 'none' | 'spacer' | 'visible';
   clusterPosition: ChatClusterPosition;
@@ -23,11 +30,11 @@ export type ChatMessageItem = {
   timeLabel: string;
 };
 
-export type ChatRenderableItem = ChatDateSeparatorItem | ChatMessageItem;
+export type ChatRenderableItem = ChatDateSeparatorItem | ChatEventItem | ChatMessageItem;
 
 type BuildChatRenderableItemsInput = {
-  avatarBySender?: Record<string, string | undefined>;
-  currentSenderName: string;
+  senderDirectory?: Record<string, { avatarUrl?: string; name: string }>;
+  currentSenderParentId: string;
   messages: Message[];
   threadKind: 'direct' | 'group';
 };
@@ -73,8 +80,8 @@ const getClusterPosition = (hasPreviousSibling: boolean, hasNextSibling: boolean
 };
 
 export const buildChatRenderableItems = ({
-  avatarBySender = {},
-  currentSenderName,
+  senderDirectory = {},
+  currentSenderParentId,
   messages,
   threadKind,
 }: BuildChatRenderableItemsInput): ChatRenderableItem[] => {
@@ -92,14 +99,25 @@ export const buildChatRenderableItems = ({
       });
     }
 
-    const mine = message.sender === currentSenderName;
+    if (message.kind === 'event') {
+      items.push({
+        id: message.id,
+        kind: 'event',
+        label: message.body ?? 'Activity update',
+        timeLabel: formatTimeLabel(message.createdAt),
+      });
+      return;
+    }
+
+    const senderName = senderDirectory[message.senderParentId]?.name ?? 'Parent';
+    const mine = message.senderParentId === currentSenderParentId;
     const sameSenderAsPrevious =
       Boolean(previousMessage) &&
-      previousMessage.sender === message.sender &&
+      previousMessage.senderParentId === message.senderParentId &&
       sameDay(previousMessage.createdAt, message.createdAt);
     const sameSenderAsNext =
       Boolean(nextMessage) &&
-      nextMessage.sender === message.sender &&
+      nextMessage.senderParentId === message.senderParentId &&
       sameDay(nextMessage.createdAt, message.createdAt);
     const isGroup = threadKind === 'group';
 
@@ -110,8 +128,8 @@ export const buildChatRenderableItems = ({
       kind: 'message',
       mine,
       photoUrls: message.photoUrls ?? [],
-      sender: message.sender,
-      senderAvatarUrl: avatarBySender[message.sender],
+      sender: senderName,
+      senderAvatarUrl: senderDirectory[message.senderParentId]?.avatarUrl,
       showSender: isGroup && !mine && !sameSenderAsPrevious,
       showTimestamp: !sameSenderAsNext,
       text: message.body,

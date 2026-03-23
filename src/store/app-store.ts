@@ -1,6 +1,14 @@
 import { create } from 'zustand';
+import { getAllChildInterests } from '@/utils/birthdays';
 
 export type Availability = 'Weekends' | 'Weekday afternoons' | 'Flexible mornings';
+
+export type ChildProfile = {
+  id: string;
+  name: string;
+  birthDate: string;
+  interests: string[];
+};
 
 export type Family = {
   id: string;
@@ -9,9 +17,8 @@ export type Family = {
   photoUrls: string[];
   area: string;
   summary: string;
-  childSummary: string;
-  childAgeLabel: string;
-  childInterests: string[];
+  parentBirthDate?: string;
+  children: ChildProfile[];
   parentInterests: string[];
   languages: string[];
   shared: string[];
@@ -55,18 +62,18 @@ export type DraftProfile = {
   photoUrls: string[];
   area: string;
   bio: string;
+  parentBirthDate?: string;
   familyVibe: string[];
   parentInterests: string[];
   languages: string[];
-  childName: string;
-  childAgeLabel: string;
-  childInterests: string[];
+  children: ChildProfile[];
 };
 
 export type DiscoveryFilters = {
   area: string;
   availability: Availability | 'Any';
   selectedInterests: string[];
+  similarAgeOnly: boolean;
 };
 
 export type CreateGroupPlayDateInput = {
@@ -115,10 +122,14 @@ type AppState = {
   toggleFamilyVibe: (value: string) => void;
   toggleParentInterest: (value: string) => void;
   toggleLanguage: (value: string) => void;
-  toggleChildInterest: (value: string) => void;
+  addDraftChild: () => void;
+  removeDraftChild: (childId: string) => void;
+  updateDraftChild: (childId: string, patch: Partial<ChildProfile>) => void;
+  toggleDraftChildInterest: (childId: string, value: string) => void;
   setDiscoveryArea: (area: string) => void;
   setDiscoveryAvailability: (availability: DiscoveryFilters['availability']) => void;
   toggleDiscoveryInterest: (value: string) => void;
+  toggleDiscoverySimilarAge: () => void;
   resetDiscoveryFilters: () => void;
   resetDemoState: () => void;
   likeFamily: (id: string) => void;
@@ -142,6 +153,15 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'group';
 
+const buildInterestDefaults = (children: ChildProfile[] = []) => getAllChildInterests(children).slice(0, 2);
+
+const createChild = (overrides: Partial<ChildProfile> = {}): ChildProfile => ({
+  id: overrides.id ?? `child-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  name: overrides.name ?? '',
+  birthDate: overrides.birthDate ?? '',
+  interests: overrides.interests ?? [],
+});
+
 const defaultDraftProfile: DraftProfile = {
   parentName: 'Anna',
   avatarUrl: 'https://randomuser.me/api/portraits/women/44.jpg',
@@ -151,13 +171,25 @@ const defaultDraftProfile: DraftProfile = {
     'https://picsum.photos/seed/anna-park/600/600',
   ],
   area: 'Vasastan',
-  bio: 'Mamma to Leo. Looking for simple weekend meetups nearby, and parents we would genuinely enjoy seeing again.',
+  bio: 'Mamma to Leo and Mila. Looking for simple weekend meetups nearby, and parents we would genuinely enjoy seeing again.',
+  parentBirthDate: '1991-05-18',
   familyVibe: ['Weekend meetups', 'Public place first', 'Outdoor-friendly'],
   parentInterests: ['Coffee walks', 'Playground hangs', 'Baking'],
   languages: ['Swedish', 'English'],
-  childName: 'Leo',
-  childAgeLabel: '4 years',
-  childInterests: ['Dinosaurs', 'Playgrounds', 'Drawing'],
+  children: [
+    createChild({
+      id: 'anna-leo',
+      name: 'Leo',
+      birthDate: '2021-04-05',
+      interests: ['Dinosaurs', 'Playgrounds', 'Drawing'],
+    }),
+    createChild({
+      id: 'anna-mila',
+      name: 'Mila',
+      birthDate: '2023-02-18',
+      interests: ['Animals', 'Books', 'Playgrounds'],
+    }),
+  ],
 };
 
 const defaultFamilies: Family[] = [
@@ -171,10 +203,16 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/sara-3/600/600',
     ],
     area: 'Vasastan',
-    summary: 'Parent to Maja, 4. Looking for easy weekend outdoor playdates and parent company that feels natural too.',
-    childSummary: 'Maja, 4',
-    childAgeLabel: '4 years',
-    childInterests: ['Playgrounds', 'Drawing', 'Crafts'],
+    summary: 'Parent to Maja. Looking for easy weekend outdoor playdates and parent company that feels natural too.',
+    parentBirthDate: '1990-04-12',
+    children: [
+      createChild({
+        id: 'sara-maja',
+        name: 'Maja',
+        birthDate: '2021-03-29',
+        interests: ['Playgrounds', 'Drawing', 'Crafts'],
+      }),
+    ],
     parentInterests: ['Coffee walks', 'Museum outings', 'Playground hangs'],
     languages: ['Swedish', 'English'],
     shared: ['Same area', 'Playgrounds', 'Weekend meetups'],
@@ -192,10 +230,15 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/fatima-3/600/600',
     ],
     area: 'Södermalm',
-    summary: 'Parent to Nora, 3. Loves calm cafe-and-park mornings and easy conversation with other international families.',
-    childSummary: 'Nora, 3',
-    childAgeLabel: '3 years',
-    childInterests: ['Animals', 'Books', 'Playgrounds'],
+    summary: 'Parent to Nora. Loves calm cafe-and-park mornings and easy conversation with other international families.',
+    children: [
+      createChild({
+        id: 'fatima-nora',
+        name: 'Nora',
+        birthDate: '2022-11-02',
+        interests: ['Animals', 'Books', 'Playgrounds'],
+      }),
+    ],
     parentInterests: ['Coffee walks', 'Cooking', 'Board games'],
     languages: ['English', 'Arabic', 'Swedish'],
     shared: ['Animals', 'Public-place first'],
@@ -213,10 +256,21 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/johan-3/600/600',
     ],
     area: 'Vasastan',
-    summary: 'Parent to Elis, 5. Outdoor family, often free on Sundays, and hoping to click with both kids and parents.',
-    childSummary: 'Elis, 5',
-    childAgeLabel: '5 years',
-    childInterests: ['Football', 'Playgrounds', 'Animals'],
+    summary: 'Parent to Elis and Alba. Outdoor family, often free on Sundays, and hoping to click with both kids and parents.',
+    children: [
+      createChild({
+        id: 'johan-elis',
+        name: 'Elis',
+        birthDate: '2020-09-18',
+        interests: ['Football', 'Playgrounds', 'Animals'],
+      }),
+      createChild({
+        id: 'johan-alba',
+        name: 'Alba',
+        birthDate: '2023-03-10',
+        interests: ['Animals', 'Playgrounds', 'Books'],
+      }),
+    ],
     parentInterests: ['Hiking', 'Fitness', 'Coffee walks'],
     languages: ['Swedish', 'English'],
     shared: ['Nearby', 'Outdoor play'],
@@ -234,13 +288,18 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/elin-3/600/600',
     ],
     area: 'Östermalm',
-    summary: 'Parent to Liv, 4. New in the area and looking for local family friends with shared parent interests too.',
-    childSummary: 'Liv, 4',
-    childAgeLabel: '4 years',
-    childInterests: ['Drawing', 'Books', 'Crafts'],
+    summary: 'Parent to Liv. New in the area and looking for local family friends with shared parent interests too.',
+    children: [
+      createChild({
+        id: 'elin-liv',
+        name: 'Liv',
+        birthDate: '2021-07-09',
+        interests: ['Drawing', 'Books', 'Crafts'],
+      }),
+    ],
     parentInterests: ['Museum outings', 'Baking', 'Board games'],
     languages: ['Swedish', 'English', 'German'],
-    shared: ['Drawing', 'Similar age'],
+    shared: ['Drawing', 'Baking'],
     familyVibe: ['New in area', 'Warm', 'Weekday afternoons'],
     meetupNote: 'Often free after preschool and likes simple neighborhood meetups.',
     availability: ['Weekday afternoons'],
@@ -346,7 +405,8 @@ const initialGroupPlayDates: GroupPlayDate[] = [
 const defaultDiscoveryFilters = (draftProfile: DraftProfile): DiscoveryFilters => ({
   area: draftProfile.area,
   availability: 'Any',
-  selectedInterests: draftProfile.childInterests.slice(0, 2),
+  selectedInterests: buildInterestDefaults(draftProfile.children),
+  similarAgeOnly: false,
 });
 
 const toggle = (values: string[], value: string) =>
@@ -376,11 +436,11 @@ export const useAppStore = create<AppState>((set) => ({
       return {
         draftProfile: nextDraft,
         discoveryFilters:
-          patch.area || patch.childInterests
+          patch.area !== undefined || patch.children !== undefined
             ? {
                 ...state.discoveryFilters,
                 area: patch.area ?? state.discoveryFilters.area,
-                selectedInterests: patch.childInterests ? patch.childInterests.slice(0, 2) : state.discoveryFilters.selectedInterests,
+                selectedInterests: patch.children ? buildInterestDefaults(nextDraft.children ?? []) : state.discoveryFilters.selectedInterests,
               }
             : state.discoveryFilters,
       };
@@ -406,17 +466,82 @@ export const useAppStore = create<AppState>((set) => ({
         languages: toggle(state.draftProfile.languages, value),
       },
     })),
-  toggleChildInterest: (value) =>
+  addDraftChild: () =>
     set((state) => {
-      const childInterests = toggle(state.draftProfile.childInterests, value);
+      const children = [...(state.draftProfile.children ?? []), createChild()];
       return {
         draftProfile: {
           ...state.draftProfile,
-          childInterests,
+          children,
         },
         discoveryFilters: {
           ...state.discoveryFilters,
-          selectedInterests: childInterests.slice(0, 2),
+          selectedInterests: buildInterestDefaults(children),
+        },
+      };
+    }),
+  removeDraftChild: (childId) =>
+    set((state) => {
+      const currentChildren = state.draftProfile.children ?? [];
+
+      if (currentChildren.length <= 1) {
+        return state;
+      }
+
+      const children = currentChildren.filter((child) => child.id !== childId);
+      return {
+        draftProfile: {
+          ...state.draftProfile,
+          children,
+        },
+        discoveryFilters: {
+          ...state.discoveryFilters,
+          selectedInterests: buildInterestDefaults(children),
+        },
+      };
+    }),
+  updateDraftChild: (childId, patch) =>
+    set((state) => {
+      const children = (state.draftProfile.children ?? []).map((child) =>
+        child.id === childId
+          ? {
+              ...child,
+              ...patch,
+              interests: patch.interests ?? child.interests,
+            }
+          : child
+      );
+
+      return {
+        draftProfile: {
+          ...state.draftProfile,
+          children,
+        },
+        discoveryFilters: {
+          ...state.discoveryFilters,
+          selectedInterests: buildInterestDefaults(children),
+        },
+      };
+    }),
+  toggleDraftChildInterest: (childId, value) =>
+    set((state) => {
+      const children = (state.draftProfile.children ?? []).map((child) =>
+        child.id === childId
+          ? {
+              ...child,
+              interests: toggle(child.interests, value),
+            }
+          : child
+      );
+
+      return {
+        draftProfile: {
+          ...state.draftProfile,
+          children,
+        },
+        discoveryFilters: {
+          ...state.discoveryFilters,
+          selectedInterests: buildInterestDefaults(children),
         },
       };
     }),
@@ -439,6 +564,13 @@ export const useAppStore = create<AppState>((set) => ({
       discoveryFilters: {
         ...state.discoveryFilters,
         selectedInterests: toggle(state.discoveryFilters.selectedInterests, value),
+      },
+    })),
+  toggleDiscoverySimilarAge: () =>
+    set((state) => ({
+      discoveryFilters: {
+        ...state.discoveryFilters,
+        similarAgeOnly: !state.discoveryFilters.similarAgeOnly,
       },
     })),
   resetDiscoveryFilters: () =>

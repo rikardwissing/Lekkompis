@@ -10,8 +10,10 @@ import { Avatar } from '@/components/ui/Avatar';
 import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAppStore } from '@/store/app-store';
+import { getFamilyFitChips, getSharedChildInterests } from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
+import { formatAgeLabelFromBirthDate, formatChildBirthdayLabel, formatParentBirthdayLabel } from '@/utils/birthdays';
 
 export function generateStaticParams() {
   return ['sara', 'fatima', 'johan', 'elin'].map((id) => ({ id }));
@@ -47,8 +49,10 @@ export default function FamilyDetailScreen() {
 
   const isMatched = matchedFamilyIds.includes(family.id);
   const isLiked = likedFamilyIds.includes(family.id);
-  const sharedInterests = family.childInterests.filter((interest) => draftProfile.childInterests.includes(interest));
+  const familyChildren = family.children ?? [];
+  const sharedInterests = getSharedChildInterests(draftProfile.children ?? [], familyChildren);
   const sharedLanguages = family.languages.filter((language) => draftProfile.languages.includes(language));
+  const fitChips = getFamilyFitChips(draftProfile, family);
   const actionLabel = isMatched ? 'Open chat' : isLiked ? 'Pending' : 'Interested';
 
   return (
@@ -83,10 +87,32 @@ export default function FamilyDetailScreen() {
           ))}
         </View>
         <Text style={styles.sectionTitle}>Children</Text>
-        <Text style={styles.body}>{family.childSummary} · {family.childAgeLabel}</Text>
+        <View style={styles.childStack}>
+          {familyChildren.map((child) => {
+            const birthdayLabel = formatChildBirthdayLabel(child.name, child.birthDate);
+            return (
+              <View key={child.id} style={styles.childBlock}>
+                <Text style={styles.childName}>{child.name}</Text>
+                <Text style={styles.body}>{formatAgeLabelFromBirthDate(child.birthDate)}</Text>
+                {isMatched && birthdayLabel ? <Text style={styles.metaLine}>{birthdayLabel}</Text> : null}
+                <View style={styles.row}>
+                  {child.interests.map((item) => (
+                    <Chip key={`${child.id}-${item}`} label={item} />
+                  ))}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+        {isMatched && family.parentBirthDate ? (
+          <>
+            <Text style={styles.sectionTitle}>Parent birthday</Text>
+            <Text style={styles.body}>{formatParentBirthdayLabel(family.parentName, family.parentBirthDate) ?? 'Not set'}</Text>
+          </>
+        ) : null}
         <Text style={styles.sectionTitle}>Why this could be a fit</Text>
         <View style={styles.row}>
-          {family.shared.map((item) => (
+          {fitChips.map((item) => (
             <Chip key={item} label={item} />
           ))}
         </View>
@@ -163,6 +189,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  childStack: {
+    gap: spacing.md,
+  },
+  childBlock: {
+    gap: spacing.sm,
+  },
+  childName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  metaLine: {
+    fontSize: 13,
+    color: colors.textMuted,
   },
   actions: {
     gap: spacing.md,

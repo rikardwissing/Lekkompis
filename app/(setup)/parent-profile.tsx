@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { SelectableChip } from '@/components/ui/SelectableChip';
 import { TextField } from '@/components/ui/TextField';
 import { PhotoStrip } from '@/components/ui/PhotoStrip';
+import { BirthdayField } from '@/components/ui/BirthdayField';
 import { areaOptions, familyVibeOptions, languageOptions, parentInterestOptions } from '@/constants/demo-profiles';
 import { useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
@@ -40,6 +41,12 @@ export default function ParentProfileScreen() {
           </View>
         </View>
         <TextField label="Short intro" value={draftProfile.bio} onChangeText={(value) => updateDraftProfile({ bio: value })} multiline />
+        <BirthdayField
+          label="Your birthday (optional)"
+          placeholder="Only shown in connections if you add it"
+          value={draftProfile.parentBirthDate ?? ''}
+          onChange={(parentBirthDate) => updateDraftProfile({ parentBirthDate })}
+        />
         <View style={styles.section}>
           <Text style={styles.label}>Parent interests</Text>
           <View style={styles.row}>

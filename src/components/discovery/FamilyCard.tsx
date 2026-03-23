@@ -4,8 +4,10 @@ import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { PhotoStrip } from '@/components/ui/PhotoStrip';
+import type { ChildProfile } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
+import { formatChildrenSummary, getAllChildInterests } from '@/utils/birthdays';
 
 type FamilyCardProps = {
   parentName: string;
@@ -13,12 +15,10 @@ type FamilyCardProps = {
   photoUrls: string[];
   area: string;
   summary: string;
-  childSummary: string;
-  childAgeLabel: string;
-  childInterests: string[];
+  children: ChildProfile[];
   parentInterests: string[];
   languages: string[];
-  shared: string[];
+  fitChips: string[];
   familyVibe: string[];
   availability: string[];
   status?: 'default' | 'liked' | 'matched';
@@ -33,12 +33,10 @@ export function FamilyCard({
   photoUrls,
   area,
   summary,
-  childSummary,
-  childAgeLabel,
-  childInterests,
+  children,
   parentInterests,
   languages,
-  shared,
+  fitChips,
   familyVibe,
   availability,
   status = 'default',
@@ -48,6 +46,8 @@ export function FamilyCard({
 }: FamilyCardProps) {
   const interestedLabel = status === 'matched' ? 'Open' : status === 'liked' ? 'Pending' : 'Interested';
   const interestedDisabled = status === 'liked';
+  const childSummary = formatChildrenSummary(children);
+  const childInterests = getAllChildInterests(children);
 
   return (
     <Card>
@@ -62,9 +62,9 @@ export function FamilyCard({
       </View>
       <Text style={styles.summary}>{summary}</Text>
       <PhotoStrip photos={photoUrls} size={96} />
-      <Text style={styles.child}>{childSummary} · {childAgeLabel}</Text>
+      <Text style={styles.child}>{childSummary}</Text>
       <View style={styles.chips}>
-        {shared.map((item) => (
+        {fitChips.map((item) => (
           <Chip key={item} label={item} />
         ))}
       </View>

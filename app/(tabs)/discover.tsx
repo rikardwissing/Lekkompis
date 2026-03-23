@@ -11,8 +11,10 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FamilyCard } from '@/components/discovery/FamilyCard';
 import { areaOptions, availabilityOptions, childInterestOptions } from '@/constants/demo-profiles';
 import { useAppStore } from '@/store/app-store';
+import { getFamilyFitChips, getFamilySortValue, isSimilarAgeFamily } from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
+import { getAllChildInterests } from '@/utils/birthdays';
 
 export default function DiscoverScreen() {
   const [showFilters, setShowFilters] = useState(false);
@@ -21,34 +23,56 @@ export default function DiscoverScreen() {
   const likedFamilyIds = useAppStore((state) => state.likedFamilyIds);
   const matchedFamilyIds = useAppStore((state) => state.matchedFamilyIds);
   const passedFamilyIds = useAppStore((state) => state.passedFamilyIds);
+  const draftProfile = useAppStore((state) => state.draftProfile);
   const discoveryFilters = useAppStore((state) => state.discoveryFilters);
   const likeFamily = useAppStore((state) => state.likeFamily);
   const passFamily = useAppStore((state) => state.passFamily);
   const setDiscoveryArea = useAppStore((state) => state.setDiscoveryArea);
   const setDiscoveryAvailability = useAppStore((state) => state.setDiscoveryAvailability);
   const toggleDiscoveryInterest = useAppStore((state) => state.toggleDiscoveryInterest);
+  const toggleDiscoverySimilarAge = useAppStore((state) => state.toggleDiscoverySimilarAge);
   const resetDiscoveryFilters = useAppStore((state) => state.resetDiscoveryFilters);
+  const draftChildren = draftProfile.children ?? [];
+  const similarAgeOnly = discoveryFilters.similarAgeOnly ?? false;
 
   const visibleFamilies = useMemo(
     () =>
-      families.filter((family) => {
-        if (passedFamilyIds.includes(family.id)) return false;
-        if (discoveryFilters.area !== 'All nearby' && family.area !== discoveryFilters.area) return false;
-        if (discoveryFilters.availability !== 'Any' && !family.availability.includes(discoveryFilters.availability)) return false;
-        if (
-          discoveryFilters.selectedInterests.length > 0 &&
-          !discoveryFilters.selectedInterests.some((interest) => family.childInterests.includes(interest))
-        ) {
-          return false;
-        }
-        return true;
-      }),
-    [discoveryFilters, families, passedFamilyIds]
+      families
+        .map((family, index) => ({ family, index }))
+        .filter(({ family }) => {
+          const familyChildren = family.children ?? [];
+          if (passedFamilyIds.includes(family.id)) return false;
+          if (discoveryFilters.area !== 'All nearby' && family.area !== discoveryFilters.area) return false;
+          if (discoveryFilters.availability !== 'Any' && !family.availability.includes(discoveryFilters.availability)) return false;
+          if (
+            discoveryFilters.selectedInterests.length > 0 &&
+            !discoveryFilters.selectedInterests.some((interest) => getAllChildInterests(familyChildren).includes(interest))
+          ) {
+            return false;
+          }
+          if (similarAgeOnly && !isSimilarAgeFamily(draftChildren, familyChildren)) {
+            return false;
+          }
+          return true;
+        })
+        .sort((left, right) => {
+          const leftSortValue = getFamilySortValue(draftChildren, left.family.children ?? []);
+          const rightSortValue = getFamilySortValue(draftChildren, right.family.children ?? []);
+
+          if (leftSortValue === rightSortValue) {
+            return left.index - right.index;
+          }
+
+          return leftSortValue < rightSortValue ? -1 : 1;
+        })
+        .map(({ family }) => family),
+    [discoveryFilters, draftChildren, families, passedFamilyIds, similarAgeOnly]
   );
   const activeFilterCount =
     (discoveryFilters.area === 'All nearby' ? 0 : 1) +
     (discoveryFilters.availability === 'Any' ? 0 : 1) +
-    discoveryFilters.selectedInterests.length;
+    discoveryFilters.selectedInterests.length +
+    (similarAgeOnly ? 1 : 0);
   const pendingCount = likedFamilyIds.filter((familyId) => !matchedFamilyIds.includes(familyId)).length;
 
   const heroCopy =
@@ -87,6 +111,7 @@ export default function DiscoverScreen() {
         <View style={styles.filters}>
           <Chip label={discoveryFilters.area} />
           <Chip label={discoveryFilters.availability} />
+          {similarAgeOnly ? <Chip label="Similar age" /> : null}
           {discoveryFilters.selectedInterests.map((interest) => (
             <Chip key={interest} label={interest} />
           ))}
@@ -127,6 +152,16 @@ export default function DiscoverScreen() {
               </View>
             </View>
             <View style={styles.filterGroup}>
+              <Text style={styles.groupLabel}>Age fit</Text>
+              <View style={styles.filters}>
+                <SelectableChip
+                  label="Similar age"
+                  selected={similarAgeOnly}
+                  onPress={toggleDiscoverySimilarAge}
+                />
+              </View>
+            </View>
+            <View style={styles.filterGroup}>
               <Text style={styles.groupLabel}>Shared interests</Text>
               <View style={styles.filters}>
                 {childInterestOptions.map((interest) => (
@@ -159,7 +194,17 @@ export default function DiscoverScreen() {
           return (
             <FamilyCard
               key={family.id}
-              {...family}
+              area={family.area}
+              availability={family.availability}
+              avatarUrl={family.avatarUrl}
+              children={family.children ?? []}
+              familyVibe={family.familyVibe}
+              fitChips={getFamilyFitChips(draftProfile, family)}
+              languages={family.languages}
+              parentInterests={family.parentInterests}
+              parentName={family.parentName}
+              photoUrls={family.photoUrls}
+              summary={family.summary}
               status={isMatched ? 'matched' : isLiked ? 'liked' : 'default'}
               onPressPass={() => passFamily(family.id)}
               onPressInterested={() => likeFamily(family.id)}

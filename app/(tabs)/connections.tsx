@@ -8,7 +8,12 @@ import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAppStore } from '@/store/app-store';
-import { getConversationThreads, getMatchedFamilies, getPendingFamilies } from '@/store/derived';
+import {
+  getConversationThreads,
+  getMatchedFamilies,
+  getPendingFamilies,
+  getUpcomingBirthdayEventsForFamily,
+} from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
@@ -70,6 +75,7 @@ export default function ConnectionsScreen() {
           <View style={styles.stack}>
             {matchedFamilies.map((family) => {
               const hasThread = threads.some((thread) => thread.route === `/chat/${family.id}-match`);
+              const familyBirthdayNote = getUpcomingBirthdayEventsForFamily(family)[0]?.label;
 
               return (
                 <Card key={family.id}>
@@ -80,6 +86,7 @@ export default function ConnectionsScreen() {
                       <Text style={styles.body}>
                         Mutual match in {family.area}. {family.meetupNote}
                       </Text>
+                      {familyBirthdayNote ? <Text style={styles.birthdayNote}>{familyBirthdayNote}</Text> : null}
                     </View>
                   </View>
                   <Button
@@ -174,5 +181,10 @@ const styles = StyleSheet.create({
   pendingItem: {
     fontSize: 15,
     color: colors.text,
+  },
+  birthdayNote: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.primary,
   },
 });

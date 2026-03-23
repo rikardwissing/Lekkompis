@@ -10,11 +10,13 @@ import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
+import { formatAgeLabelFromBirthDate, formatDateOnly } from '@/utils/birthdays';
 
 export default function ProfileScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const draftProfile = useAppStore((state) => state.draftProfile);
   const resetDemoState = useAppStore((state) => state.resetDemoState);
+  const children = draftProfile.children ?? [];
   const headerTitleOpacity = scrollY.interpolate({
     inputRange: [24, 92],
     outputRange: [0, 1],
@@ -43,6 +45,8 @@ export default function ProfileScreen() {
       </Card>
       <Card>
         <Text style={styles.sectionTitle}>Parent highlights</Text>
+        {draftProfile.parentBirthDate ? <Text style={styles.metaLabel}>Birthday</Text> : null}
+        {draftProfile.parentBirthDate ? <Text style={styles.meta}>{formatDateOnly(draftProfile.parentBirthDate)}</Text> : null}
         <Text style={styles.metaLabel}>Interests</Text>
         <View style={styles.row}>
           {draftProfile.parentInterests.map((interest) => (
@@ -56,15 +60,19 @@ export default function ProfileScreen() {
           ))}
         </View>
       </Card>
-      <Card>
-        <Text style={styles.sectionTitle}>{draftProfile.childName}</Text>
-        <Text style={styles.meta}>{draftProfile.childAgeLabel}</Text>
-        <View style={styles.row}>
-          {draftProfile.childInterests.map((interest) => (
-            <Chip key={interest} label={interest} />
-          ))}
-        </View>
-      </Card>
+      {children.map((child) => (
+        <Card key={child.id}>
+          <Text style={styles.sectionTitle}>{child.name}</Text>
+          <Text style={styles.meta}>{formatAgeLabelFromBirthDate(child.birthDate)}</Text>
+          <Text style={styles.metaLabel}>Birthday</Text>
+          <Text style={styles.meta}>{formatDateOnly(child.birthDate)}</Text>
+          <View style={styles.row}>
+            {child.interests.map((interest) => (
+              <Chip key={`${child.id}-${interest}`} label={interest} />
+            ))}
+          </View>
+        </Card>
+      ))}
       <Card>
         <Text style={styles.sectionTitle}>Family vibe</Text>
         <View style={styles.row}>

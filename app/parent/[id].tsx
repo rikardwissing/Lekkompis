@@ -10,9 +10,12 @@ import { Avatar } from '@/components/ui/Avatar';
 import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
-  getActiveMatchedFamilyIds,
-  getLinkedParentMatchedFamilyIds,
-  getPrimaryParent,
+  buildDirectMatchId,
+  getActiveLikedParentIds,
+  getActiveMatchedParentIds,
+  getActiveParent,
+  getFamilyByParentId,
+  getLinkedParentMatchedParentIds,
   useAppStore,
 } from '@/store/app-store';
 import {
@@ -26,32 +29,32 @@ import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { formatAgeLabelFromBirthDate, formatChildBirthdayLabel, formatDueMonthLabel, formatParentBirthdayLabel } from '@/utils/birthdays';
 
-export function generateStaticParams() {
-  return ['sara', 'fatima', 'johan', 'elin', 'mira'].map((id) => ({ id }));
-}
-
-export default function FamilyDetailScreen() {
+export default function ParentDetailScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const { id } = useLocalSearchParams<{ id: string }>();
   const families = useAppStore((state) => state.families);
+  const likeParent = useAppStore((state) => state.likeParent);
+  const likedParentIdsByParent = useAppStore((state) => state.likedParentIdsByParent);
   const matchedParentIdsByParent = useAppStore((state) => state.matchedParentIdsByParent);
   const draftProfile = useAppStore((state) => state.draftProfile);
-  const family = families.find((item) => item.id === id);
-  const familyPrimaryParent = family ? getPrimaryParent(family) : null;
-  const matchedFamilyIds = getActiveMatchedFamilyIds(draftProfile, matchedParentIdsByParent, families);
-  const linkedParentMatchedFamilyIds = getLinkedParentMatchedFamilyIds(draftProfile, matchedParentIdsByParent, families);
+  const family = id ? getFamilyByParentId(families, id) : null;
+  const parent = family?.parents.find((entry) => entry.id === id) ?? null;
+  const activeParent = getActiveParent(draftProfile);
+  const likedParentIds = getActiveLikedParentIds(draftProfile, likedParentIdsByParent);
+  const matchedParentIds = getActiveMatchedParentIds(draftProfile, matchedParentIdsByParent);
+  const linkedParentMatchedParentIds = getLinkedParentMatchedParentIds(draftProfile, matchedParentIdsByParent);
   const headerTitleOpacity = scrollY.interpolate({
     inputRange: [24, 92],
     outputRange: [0, 1],
     extrapolate: 'clamp',
   });
 
-  if (!family) {
+  if (!family || !parent) {
     return (
-      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/discover" title="Family" />}>
+      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/discover" title="Parent" />}>
         <EmptyState
-          title="Family not found"
-          body="This family profile is no longer available in the demo, so we could not open the detail view."
+          title="Parent not found"
+          body="This parent profile is no longer available in the demo, so we could not open the detail view."
           actionLabel="Back to discover"
           onAction={() => router.replace('/(tabs)/discover')}
         />
@@ -59,41 +62,45 @@ export default function FamilyDetailScreen() {
     );
   }
 
-  const isMatched = matchedFamilyIds.includes(family.id);
+  const isMatched = matchedParentIds.includes(parent.id);
+  const isLiked = likedParentIds.includes(parent.id);
+  const linkedParentHasConnection = !isMatched && linkedParentMatchedParentIds.includes(parent.id);
   const familyChildren = family.children ?? [];
   const sharedInterests = [
     ...new Set([
       ...getSharedChildInterests(draftProfile.children ?? [], familyChildren),
-      ...getSharedParentInterests(draftProfile, family),
+      ...getSharedParentInterests(draftProfile, family, parent),
     ]),
   ];
-  const sharedLanguages = getSharedLanguages(draftProfile, family);
-  const fitChips = getFamilyFitChips(draftProfile, family);
+  const sharedLanguages = getSharedLanguages(draftProfile, family, parent);
+  const fitChips = getFamilyFitChips(draftProfile, family, parent);
   const distanceLabel = getFamilyDistanceLabel(draftProfile, family);
-  const discoverableParents = family.parents.filter((parent) => parent.isDiscoverable);
-  const sharedConnectionAvailable = !isMatched && linkedParentMatchedFamilyIds.includes(family.id);
+  const matchId = activeParent ? buildDirectMatchId(activeParent.id, parent.id) : null;
+  const actionLabel = isMatched ? 'Open chat' : isLiked ? 'Pending' : linkedParentHasConnection ? 'Add to my account' : 'Interested';
 
   return (
     <Screen
-      header={<SubscreenHeader fallbackHref="/(tabs)/discover" title={familyPrimaryParent?.firstName ?? 'Family'} titleOpacity={headerTitleOpacity} />}
+      header={<SubscreenHeader fallbackHref="/(tabs)/discover" title={parent.firstName} titleOpacity={headerTitleOpacity} />}
       scroll
       onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
         useNativeDriver: true,
       })}
     >
       <View style={styles.hero}>
-        <Avatar name={familyPrimaryParent?.firstName ?? 'Parent'} imageUrl={familyPrimaryParent?.avatarUrl} size={72} />
+        <Avatar name={parent.firstName} imageUrl={parent.avatarUrl} size={72} />
         <View style={styles.heroText}>
-          <Text style={styles.title}>{familyPrimaryParent?.firstName ?? 'Parent'}</Text>
+          <Text style={styles.title}>{parent.firstName}</Text>
           <Text style={styles.subtitle}>{distanceLabel ?? 'Nearby family'}</Text>
         </View>
       </View>
       <PhotoStrip photos={family.photoUrls} size={116} />
       <Card>
-        <Text style={styles.sectionTitle}>About this family</Text>
+        <Text style={styles.sectionTitle}>About {parent.firstName}</Text>
         <View style={styles.row}>
           {distanceLabel ? <Chip label={distanceLabel} /> : null}
         </View>
+        <Text style={styles.body}>{parent.intro}</Text>
+        <Text style={styles.sectionTitle}>About this family</Text>
         <Text style={styles.body}>{family.familySummary}</Text>
         {family.expecting ? (
           <>
@@ -106,13 +113,13 @@ export default function FamilyDetailScreen() {
         ) : null}
         <Text style={styles.sectionTitle}>Parent interests</Text>
         <View style={styles.row}>
-          {(familyPrimaryParent?.interests ?? []).map((item) => (
+          {parent.interests.map((item) => (
             <Chip key={item} label={item} />
           ))}
         </View>
         <Text style={styles.sectionTitle}>Spoken languages</Text>
         <View style={styles.row}>
-          {(familyPrimaryParent?.languages ?? []).map((item) => (
+          {parent.languages.map((item) => (
             <Chip key={item} label={item} />
           ))}
         </View>
@@ -138,11 +145,11 @@ export default function FamilyDetailScreen() {
         ) : (
           <Text style={styles.body}>No born children added yet. This family is currently matching through parent details and expecting stage.</Text>
         )}
-        {isMatched && familyPrimaryParent?.birthDate ? (
+        {isMatched && parent.birthDate ? (
           <>
-            <Text style={styles.sectionTitle}>Parent birthday</Text>
+            <Text style={styles.sectionTitle}>Birthday</Text>
             <Text style={styles.body}>
-              {formatParentBirthdayLabel(familyPrimaryParent.firstName, familyPrimaryParent.birthDate) ?? 'Not set'}
+              {formatParentBirthdayLabel(parent.firstName, parent.birthDate) ?? 'Not set'}
             </Text>
           </>
         ) : null}
@@ -170,19 +177,30 @@ export default function FamilyDetailScreen() {
         </View>
         <Text style={styles.sectionTitle}>First meetup tone</Text>
         <Text style={styles.body}>{family.meetupNote}</Text>
-        {sharedConnectionAvailable ? (
+        {linkedParentHasConnection ? (
           <Text style={styles.sharedConnectionNote}>
-            {familyPrimaryParent?.firstName ?? 'This parent'} is already connected with another linked parent in your family. Add them to your own account to join the direct thread as yourself.
+            {parent.firstName} is already connected with another linked parent in your family. Add them to your own account to join the direct thread as yourself.
           </Text>
         ) : null}
       </Card>
       <View style={styles.actions}>
-        {discoverableParents.length > 0 ? (
-          <Button
-            label={sharedConnectionAvailable ? 'Open discoverable parent' : 'View discoverable parent'}
-            onPress={() => router.push(`/parent/${discoverableParents[0].id}`)}
-          />
-        ) : null}
+        <Button
+          disabled={isLiked && !isMatched}
+          label={actionLabel}
+          onPress={() => {
+            if (isMatched && matchId) {
+              router.push(`/chat/${matchId}`);
+              return;
+            }
+
+            if (isLiked) {
+              return;
+            }
+
+            likeParent(parent.id);
+            router.push('/(tabs)/connections');
+          }}
+        />
       </View>
     </Screen>
   );

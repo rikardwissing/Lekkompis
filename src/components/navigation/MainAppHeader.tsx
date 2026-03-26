@@ -20,7 +20,7 @@ export function MainAppHeader({ title, titleOpacity }: MainAppHeaderProps) {
   const currentFamilyId = useAppStore((state) => state.currentFamilyId);
   const draftProfile = useAppStore((state) => state.draftProfile);
   const directConversationLastSeenAtByParent = useAppStore((state) => state.directConversationLastSeenAtByParent);
-  const matchedFamilyIdsByParent = useAppStore((state) => state.matchedFamilyIdsByParent);
+  const matchedParentIdsByParent = useAppStore((state) => state.matchedParentIdsByParent);
   const groupConversationLastSeenAtByParent = useAppStore((state) => state.groupConversationLastSeenAtByParent);
   const families = useAppStore((state) => state.families);
   const messagesByMatch = useAppStore((state) => state.messagesByMatch);
@@ -34,7 +34,7 @@ export function MainAppHeader({ title, titleOpacity }: MainAppHeaderProps) {
           currentFamilyId,
           draftProfile,
           directConversationLastSeenAtByParent,
-          matchedFamilyIdsByParent,
+          matchedParentIdsByParent,
           groupConversationLastSeenAtByParent,
           families,
           messagesByMatch,
@@ -50,7 +50,7 @@ export function MainAppHeader({ title, titleOpacity }: MainAppHeaderProps) {
       groupConversationLastSeenAtByParent,
       groupMessagesByPlayDate,
       groupPlayDates,
-      matchedFamilyIdsByParent,
+      matchedParentIdsByParent,
       messagesByMatch,
     ]
   );

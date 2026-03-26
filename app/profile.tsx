@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { SubscreenHeader } from '@/components/navigation/SubscreenHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
@@ -10,7 +11,6 @@ import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { SelectableChip } from '@/components/ui/SelectableChip';
 import {
   getActiveParent,
-  getPrimaryParent,
   isPrimaryActiveParent,
   useAppStore,
 } from '@/store/app-store';
@@ -31,7 +31,6 @@ export default function ProfileScreen() {
   const resetDemoState = useAppStore((state) => state.resetDemoState);
   const children = draftProfile.children ?? [];
   const activeParent = getActiveParent(draftProfile);
-  const primaryParent = getPrimaryParent(draftProfile);
   const primarySession = isPrimaryActiveParent(draftProfile);
   const linkedParents = draftProfile.parents.filter((parent) => parent.status === 'active');
   const coParent = linkedParents.find((parent) => parent.role === 'coparent');
@@ -63,8 +62,12 @@ export default function ProfileScreen() {
             </Text>
           </View>
         </View>
-        <Text style={styles.body}>{draftProfile.bio}</Text>
+        <Text style={styles.metaLabel}>About {activeParent?.firstName ?? 'this parent'}</Text>
+        <Text style={styles.body}>{activeParent?.intro ?? 'No parent intro yet.'}</Text>
+        <Text style={styles.metaLabel}>About this family</Text>
+        <Text style={styles.body}>{draftProfile.familySummary}</Text>
         <PhotoStrip photos={draftProfile.photoUrls} size={104} />
+        <Button label="Edit family and parent profile" onPress={() => router.push('/(setup)/parent-profile')} variant="secondary" />
       </Card>
 
       <Card>
@@ -86,21 +89,23 @@ export default function ProfileScreen() {
       </Card>
 
       <Card>
-        <Text style={styles.sectionTitle}>Primary parent profile</Text>
-        {primaryParent?.birthDate ? <Text style={styles.metaLabel}>Birthday</Text> : null}
-        {primaryParent?.birthDate ? <Text style={styles.meta}>{formatDateOnly(primaryParent.birthDate)}</Text> : null}
+        <Text style={styles.sectionTitle}>Active parent profile</Text>
+        {activeParent?.birthDate ? <Text style={styles.metaLabel}>Birthday</Text> : null}
+        {activeParent?.birthDate ? <Text style={styles.meta}>{formatDateOnly(activeParent.birthDate)}</Text> : null}
         <Text style={styles.metaLabel}>Interests</Text>
         <View style={styles.row}>
-          {(primaryParent?.interests ?? []).map((interest) => (
+          {(activeParent?.interests ?? []).map((interest) => (
             <Chip key={interest} label={interest} />
           ))}
         </View>
         <Text style={styles.metaLabel}>Spoken languages</Text>
         <View style={styles.row}>
-          {(primaryParent?.languages ?? []).map((language) => (
+          {(activeParent?.languages ?? []).map((language) => (
             <Chip key={language} label={language} />
           ))}
         </View>
+        <Text style={styles.metaLabel}>Visible in discover</Text>
+        <Text style={styles.meta}>{activeParent?.isDiscoverable ? 'Yes' : 'Hidden'}</Text>
       </Card>
 
       <Card>

@@ -130,7 +130,7 @@ export default function ConversationsScreen() {
   const currentFamilyId = useAppStore((state) => state.currentFamilyId);
   const draftProfile = useAppStore((state) => state.draftProfile);
   const directConversationLastSeenAtByParent = useAppStore((state) => state.directConversationLastSeenAtByParent);
-  const matchedFamilyIdsByParent = useAppStore((state) => state.matchedFamilyIdsByParent);
+  const matchedParentIdsByParent = useAppStore((state) => state.matchedParentIdsByParent);
   const groupConversationLastSeenAtByParent = useAppStore((state) => state.groupConversationLastSeenAtByParent);
   const families = useAppStore((state) => state.families);
   const messagesByMatch = useAppStore((state) => state.messagesByMatch);
@@ -143,7 +143,7 @@ export default function ConversationsScreen() {
         currentFamilyId,
         draftProfile,
         directConversationLastSeenAtByParent,
-        matchedFamilyIdsByParent,
+        matchedParentIdsByParent,
         groupConversationLastSeenAtByParent,
         families,
         messagesByMatch,
@@ -158,7 +158,7 @@ export default function ConversationsScreen() {
       groupConversationLastSeenAtByParent,
       groupMessagesByPlayDate,
       groupPlayDates,
-      matchedFamilyIdsByParent,
+      matchedParentIdsByParent,
       messagesByMatch,
     ]
   );
@@ -204,7 +204,7 @@ export default function ConversationsScreen() {
     activeFilter === 'unread'
       ? 'Threads that still need your attention.'
       : activeFilter === 'direct'
-        ? 'One-to-one chats with matched families.'
+        ? 'One-to-one chats with matched parents.'
         : activeFilter === 'groups'
           ? 'Group plans and invitations in one stream.'
           : 'One running list, newest message first. Unread threads stay highlighted.';
@@ -219,7 +219,7 @@ export default function ConversationsScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.title}>Conversations</Text>
-        <Text style={styles.subtitle}>Direct and group threads live here once plans start moving.</Text>
+        <Text style={styles.subtitle}>Direct parent chats and shared family group threads live here once plans start moving.</Text>
       </View>
 
       {threads.length > 0 ? (

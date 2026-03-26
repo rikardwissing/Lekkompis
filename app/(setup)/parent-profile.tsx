@@ -11,7 +11,7 @@ import { BirthdayField } from '@/components/ui/BirthdayField';
 import { MonthField } from '@/components/ui/MonthField';
 import { stockholmLocationPresets } from '@/constants/locations';
 import { familyVibeOptions, languageOptions, parentInterestOptions } from '@/constants/demo-profiles';
-import { getPrimaryParent, useAppStore } from '@/store/app-store';
+import { getActiveParent, useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { getPrivateLocationLabel } from '@/utils/location';
@@ -23,31 +23,69 @@ export default function ParentProfileScreen() {
   const toggleFamilyVibe = useAppStore((state) => state.toggleFamilyVibe);
   const toggleParentInterest = useAppStore((state) => state.toggleParentInterest);
   const toggleLanguage = useAppStore((state) => state.toggleLanguage);
-  const primaryParent = getPrimaryParent(draftProfile);
+  const activeParent = getActiveParent(draftProfile);
   const canContinue = Boolean(draftProfile.homeLocation);
 
   return (
     <Screen scroll>
       <View style={styles.header}>
-        <Text style={styles.title}>Parent profile</Text>
-        <Text style={styles.subtitle}>Show the adult side too. Photos, interests, languages, and expecting details all help this feel like parent matching, not just child matching.</Text>
+        <Text style={styles.title}>Family and parent profile</Text>
+        <Text style={styles.subtitle}>Keep family context shared, but let each parent show their own voice too. This is what nearby parents will discover first.</Text>
       </View>
       <Card>
         <TextField
           label="First name"
-          value={primaryParent?.firstName ?? ''}
+          value={activeParent?.firstName ?? ''}
           onChangeText={(value) => {
-            if (!primaryParent) {
+            if (!activeParent) {
               return;
             }
 
-            updateDraftParent(primaryParent.id, { firstName: value });
+            updateDraftParent(activeParent.id, { firstName: value });
           }}
         />
         <View style={styles.section}>
           <Text style={styles.label}>Mock profile photos</Text>
           <PhotoStrip photos={draftProfile.photoUrls} size={112} />
           <Text style={styles.helper}>Temporary placeholder photos for the prototype to make each parent profile feel more personal.</Text>
+        </View>
+        <View style={styles.section}>
+          <TextField
+            label="Family intro"
+            value={draftProfile.familySummary}
+            onChangeText={(value) => updateDraftProfile({ familySummary: value })}
+            multiline
+          />
+        </View>
+        <View style={styles.section}>
+          <TextField
+            label="About you"
+            value={activeParent?.intro ?? ''}
+            onChangeText={(value) => {
+              if (!activeParent) {
+                return;
+              }
+
+              updateDraftParent(activeParent.id, { intro: value });
+            }}
+            multiline
+          />
+        </View>
+        <View style={styles.section}>
+          <Text style={styles.label}>Discoverability</Text>
+          <View style={styles.row}>
+            <SelectableChip
+              label="Shown in discover"
+              selected={Boolean(activeParent?.isDiscoverable)}
+              onPress={() => {
+                if (!activeParent) {
+                  return;
+                }
+
+                updateDraftParent(activeParent.id, { isDiscoverable: !activeParent.isDiscoverable });
+              }}
+            />
+          </View>
         </View>
         <View style={styles.section}>
           <LocationField
@@ -66,17 +104,16 @@ export default function ParentProfileScreen() {
             value={draftProfile.homeLocation}
           />
         </View>
-        <TextField label="Short intro" value={draftProfile.bio} onChangeText={(value) => updateDraftProfile({ bio: value })} multiline />
         <BirthdayField
           label="Your birthday (optional)"
           placeholder="Only shown in connections if you add it"
-          value={primaryParent?.birthDate ?? ''}
+          value={activeParent?.birthDate ?? ''}
           onChange={(birthDate) => {
-            if (!primaryParent) {
+            if (!activeParent) {
               return;
             }
 
-            updateDraftParent(primaryParent.id, { birthDate });
+            updateDraftParent(activeParent.id, { birthDate });
           }}
         />
         <View style={styles.section}>
@@ -86,7 +123,7 @@ export default function ParentProfileScreen() {
               <SelectableChip
                 key={item}
                 label={item}
-                selected={primaryParent?.interests.includes(item) ?? false}
+                selected={activeParent?.interests.includes(item) ?? false}
                 onPress={() => toggleParentInterest(item)}
               />
             ))}
@@ -99,7 +136,7 @@ export default function ParentProfileScreen() {
               <SelectableChip
                 key={item}
                 label={item}
-                selected={primaryParent?.languages.includes(item) ?? false}
+                selected={activeParent?.languages.includes(item) ?? false}
                 onPress={() => toggleLanguage(item)}
               />
             ))}

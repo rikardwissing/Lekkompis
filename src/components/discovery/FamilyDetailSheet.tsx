@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { DiscoveryBottomSheet } from '@/components/discovery/DiscoveryBottomSheet';
-import type { DraftProfile, Family } from '@/store/app-store';
-import { getPrimaryParent } from '@/store/app-store';
+import type { DraftProfile, Family, ParentAccount } from '@/store/app-store';
 import {
   getFamilyChildrenSummary,
   getFamilyDistanceLabel,
@@ -17,6 +16,7 @@ import { spacing } from '@/theme/spacing';
 type FamilyDetailSheetProps = {
   draftProfile: DraftProfile;
   family: Family | null;
+  parent: ParentAccount | null;
   onClose: () => void;
   onOpenProfile: () => void;
   visible: boolean;
@@ -25,16 +25,16 @@ type FamilyDetailSheetProps = {
 export function FamilyDetailSheet({
   draftProfile,
   family,
+  parent,
   onClose,
   onOpenProfile,
   visible,
 }: FamilyDetailSheetProps) {
-  if (!family) {
+  if (!family || !parent) {
     return null;
   }
 
-  const publicParent = getPrimaryParent(family);
-  const fitChips = getFamilyFitChips(draftProfile, family);
+  const fitChips = getFamilyFitChips(draftProfile, family, parent);
   const distanceLabel = getFamilyDistanceLabel(draftProfile, family);
   const familySummary = getFamilyChildrenSummary(family.children ?? [], family.expecting);
   const childInterests = [...new Set((family.children ?? []).flatMap((child) => child.interests))];
@@ -43,7 +43,7 @@ export function FamilyDetailSheet({
     <DiscoveryBottomSheet
       footer={<Button label="View full profile" onPress={onOpenProfile} />}
       onClose={onClose}
-      title={`About ${publicParent?.firstName ?? 'this family'}`}
+      title={`About ${parent.firstName}`}
       visible={visible}
     >
       <ScrollView
@@ -51,19 +51,24 @@ export function FamilyDetailSheet({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.identityRow}>
-          <Avatar imageUrl={publicParent?.avatarUrl} name={publicParent?.firstName ?? 'Parent'} size={56} />
+          <Avatar imageUrl={parent.avatarUrl} name={parent.firstName} size={56} />
           <View style={styles.identityCopy}>
-            <Text style={styles.name}>{publicParent?.firstName ?? 'Parent'}</Text>
+            <Text style={styles.name}>{parent.firstName}</Text>
             {distanceLabel ? <Text style={styles.meta}>{distanceLabel}</Text> : null}
           </View>
         </View>
 
-        <Text style={styles.summary}>{family.summary}</Text>
+        <Text style={styles.summary}>{parent.intro}</Text>
         <PhotoStrip photos={family.photoUrls} size={88} />
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Family snapshot</Text>
           <Text style={styles.body}>{familySummary}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>About this family</Text>
+          <Text style={styles.body}>{family.familySummary}</Text>
         </View>
 
         <View style={styles.section}>
@@ -78,7 +83,7 @@ export function FamilyDetailSheet({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Parent interests</Text>
           <View style={styles.row}>
-            {(publicParent?.interests ?? []).map((item) => (
+            {parent.interests.map((item) => (
               <Chip key={item} label={item} />
             ))}
           </View>
@@ -87,7 +92,7 @@ export function FamilyDetailSheet({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Spoken languages</Text>
           <View style={styles.row}>
-            {(publicParent?.languages ?? []).map((item) => (
+            {parent.languages.map((item) => (
               <Chip key={item} label={item} />
             ))}
           </View>

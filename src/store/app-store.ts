@@ -26,6 +26,8 @@ export type ParentAccount = {
   firstName: string;
   avatarUrl: string;
   birthDate?: string;
+  intro: string;
+  isDiscoverable: boolean;
   interests: string[];
   languages: string[];
   role: ParentRole;
@@ -43,7 +45,7 @@ export type Family = {
   primaryParentId: string;
   photoUrls: string[];
   homeLocation: SavedLocation;
-  summary: string;
+  familySummary: string;
   children: ChildProfile[];
   expecting: ExpectingProfile | null;
   shared: string[];
@@ -104,7 +106,7 @@ export type DraftProfile = {
   activeParentId: string;
   photoUrls: string[];
   homeLocation: SavedLocation | null;
-  bio: string;
+  familySummary: string;
   familyVibe: string[];
   children: ChildProfile[];
   expecting: ExpectingProfile | null;
@@ -157,7 +159,7 @@ export type ConversationThread = {
   unreadCount: number;
 };
 
-type ParentFamilyIdsByParent = Record<string, string[]>;
+type ParentIdsByParent = Record<string, string[]>;
 type ConversationLastSeenByParent = Record<string, Record<string, number>>;
 
 type AppState = {
@@ -165,9 +167,9 @@ type AppState = {
   draftProfile: DraftProfile;
   coParentInvite: CoParentInvite | null;
   families: Family[];
-  likedFamilyIdsByParent: ParentFamilyIdsByParent;
-  passedFamilyIdsByParent: ParentFamilyIdsByParent;
-  matchedFamilyIdsByParent: ParentFamilyIdsByParent;
+  likedParentIdsByParent: ParentIdsByParent;
+  passedParentIdsByParent: ParentIdsByParent;
+  matchedParentIdsByParent: ParentIdsByParent;
   directConversationLastSeenAtByParent: ConversationLastSeenByParent;
   groupConversationLastSeenAtByParent: Record<string, Record<string, number>>;
   messagesByMatch: Record<string, Message[]>;
@@ -201,8 +203,8 @@ type AppState = {
   togglePublicEventActivity: (value: string) => void;
   resetPublicEventFilters: () => void;
   resetDemoState: () => void;
-  likeFamily: (id: string) => void;
-  passFamily: (id: string) => void;
+  likeParent: (id: string) => void;
+  passParent: (id: string) => void;
   markDirectConversationRead: (conversationId: string, seenAt?: number) => void;
   markGroupConversationRead: (conversationId: string, seenAt?: number) => void;
   sendMessage: (matchId: string, body: string, photoUrls?: string[]) => void;
@@ -223,6 +225,8 @@ const DEMO_COPARENT: ParentAccount = {
   firstName: 'Lukas',
   avatarUrl: 'https://randomuser.me/api/portraits/men/46.jpg',
   birthDate: '1989-11-02',
+  intro: 'I am usually the one suggesting an easy coffee-and-playground first meetup and keeping things low pressure.',
+  isDiscoverable: false,
   interests: ['Coffee walks', 'Cooking', 'Hiking'],
   languages: ['Swedish', 'English'],
   role: 'coparent',
@@ -264,6 +268,8 @@ const createParent = (overrides: Partial<ParentAccount> = {}): ParentAccount => 
   firstName: overrides.firstName ?? '',
   avatarUrl: overrides.avatarUrl ?? '',
   birthDate: overrides.birthDate,
+  intro: overrides.intro ?? '',
+  isDiscoverable: overrides.isDiscoverable ?? false,
   interests: overrides.interests ?? [],
   languages: overrides.languages ?? [],
   role: overrides.role ?? 'coparent',
@@ -272,6 +278,25 @@ const createParent = (overrides: Partial<ParentAccount> = {}): ParentAccount => 
 
 const getParentByIdInternal = (parents: ParentAccount[], parentId: string) =>
   parents.find((parent) => parent.id === parentId);
+
+const getFamilyByParentIdInternal = (families: Family[], parentId: string) =>
+  families.find((family) => family.parents.some((parent) => parent.id === parentId));
+
+const getFamilyIdForParentIdInternal = (families: Family[], parentId: string) =>
+  getFamilyByParentIdInternal(families, parentId)?.id;
+
+const buildDirectMatchIdInternal = (localParentId: string, remoteParentId: string) =>
+  `${localParentId}__${remoteParentId}`;
+
+const parseDirectMatchIdInternal = (matchId: string) => {
+  const [localParentId, remoteParentId] = matchId.split('__');
+
+  if (!localParentId || !remoteParentId) {
+    return null;
+  }
+
+  return { localParentId, remoteParentId };
+};
 
 const getPrimaryParentInternal = <T extends ParentContainer>(value: T) =>
   getParentByIdInternal(value.parents, value.primaryParentId) ?? value.parents[0];
@@ -294,7 +319,7 @@ const toggle = (values: string[], value: string) =>
 
 const buildInviteCode = () => `FAM-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
-const getFamilyIdsForParentInternal = (valuesByParent: ParentFamilyIdsByParent, parentId: string) =>
+const getIdsForParentInternal = (valuesByParent: ParentIdsByParent, parentId: string) =>
   valuesByParent[parentId] ?? [];
 
 const getDirectSeenForParentInternal = (valuesByParent: ConversationLastSeenByParent, parentId: string) =>
@@ -338,6 +363,8 @@ const defaultDraftProfile: DraftProfile = {
       firstName: 'Anna',
       avatarUrl: 'https://randomuser.me/api/portraits/women/44.jpg',
       birthDate: '1991-05-18',
+      intro: 'I love warm, nearby meetups that feel easy for both kids and parents right from the start.',
+      isDiscoverable: true,
       interests: ['Coffee walks', 'Playground hangs', 'Baking'],
       languages: ['Swedish', 'English'],
       role: 'primary',
@@ -352,7 +379,8 @@ const defaultDraftProfile: DraftProfile = {
     'https://picsum.photos/seed/anna-park/600/600',
   ],
   homeLocation: requireLocation('vasastan'),
-  bio: 'Mamma to Leo and Mila, and expecting another baby in September. Looking for simple weekend meetups nearby and parent company we would genuinely enjoy seeing again.',
+  familySummary:
+    'Family with Leo and Mila, and another baby due in September. We are looking for simple nearby meetups that feel easy for both the kids and the grown-ups.',
   familyVibe: ['Weekend meetups', 'Public place first', 'Outdoor-friendly'],
   children: [
     createChild({
@@ -383,9 +411,23 @@ const defaultFamilies: Family[] = [
         firstName: 'Sara',
         avatarUrl: 'https://randomuser.me/api/portraits/women/68.jpg',
         birthDate: '1990-04-12',
+        intro: 'I love easy weekend outdoor plans and parent company that feels natural from the first meetup.',
+        isDiscoverable: true,
         interests: ['Coffee walks', 'Museum outings', 'Playground hangs'],
         languages: ['Swedish', 'English'],
         role: 'primary',
+        status: 'active',
+      }),
+      createParent({
+        id: 'sara-coparent',
+        firstName: 'Erik',
+        avatarUrl: 'https://randomuser.me/api/portraits/men/54.jpg',
+        birthDate: '1988-08-21',
+        intro: 'I am usually the one suggesting park meetups, coffee afterwards, and a calm first hello for everyone.',
+        isDiscoverable: true,
+        interests: ['Coffee walks', 'Hiking', 'Board games'],
+        languages: ['Swedish', 'English'],
+        role: 'coparent',
         status: 'active',
       }),
     ],
@@ -395,7 +437,7 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/sara-3/600/600',
     ],
     homeLocation: requireLocation('hagastaden'),
-    summary: 'Parent to Maja. Looking for easy weekend outdoor playdates and parent company that feels natural too.',
+    familySummary: 'Family with Maja. We like easy local outdoor plans and simple first meetups that can stay short if needed.',
     children: [
       createChild({
         id: 'sara-maja',
@@ -418,6 +460,8 @@ const defaultFamilies: Family[] = [
         id: 'fatima-primary',
         firstName: 'Fatima',
         avatarUrl: 'https://randomuser.me/api/portraits/women/79.jpg',
+        intro: 'I enjoy calm cafe-and-park mornings and easy conversation with other international parents.',
+        isDiscoverable: true,
         interests: ['Coffee walks', 'Cooking', 'Board games'],
         languages: ['English', 'Arabic', 'Swedish'],
         role: 'primary',
@@ -430,7 +474,7 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/fatima-3/600/600',
     ],
     homeLocation: requireLocation('sodermalm'),
-    summary: 'Parent to Nora. Loves calm cafe-and-park mornings and easy conversation with other international families.',
+    familySummary: 'Family with Nora. We prefer calm local meetups and a gentle pace that works well for quieter kids.',
     children: [
       createChild({
         id: 'fatima-nora',
@@ -453,6 +497,8 @@ const defaultFamilies: Family[] = [
         id: 'johan-primary',
         firstName: 'Johan',
         avatarUrl: 'https://randomuser.me/api/portraits/men/32.jpg',
+        intro: 'I am up for outdoor play, active kids, and quick local plans that do not need much ceremony.',
+        isDiscoverable: true,
         interests: ['Hiking', 'Fitness', 'Coffee walks'],
         languages: ['Swedish', 'English'],
         role: 'primary',
@@ -465,7 +511,8 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/johan-3/600/600',
     ],
     homeLocation: requireLocation('norrmalm'),
-    summary: 'Parent to Elis and Alba, with another baby due in October. Outdoor family hoping to click with both kids and parents.',
+    familySummary:
+      'Family with Elis and Alba, plus another baby due in October. We are outdoors a lot and hoping to click with both kids and parents.',
     children: [
       createChild({
         id: 'johan-elis',
@@ -496,6 +543,8 @@ const defaultFamilies: Family[] = [
         id: 'elin-primary',
         firstName: 'Elin',
         avatarUrl: 'https://randomuser.me/api/portraits/women/21.jpg',
+        intro: 'I am new in the area and would love local parent connections that feel warm, thoughtful, and easy to repeat.',
+        isDiscoverable: true,
         interests: ['Museum outings', 'Baking', 'Board games'],
         languages: ['Swedish', 'English', 'German'],
         role: 'primary',
@@ -508,7 +557,7 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/elin-3/600/600',
     ],
     homeLocation: requireLocation('ostermalm'),
-    summary: 'Parent to Liv. New in the area and looking for local family friends with shared parent interests too.',
+    familySummary: 'Family with Liv. We are new nearby and looking for local families we would genuinely enjoy seeing again.',
     children: [
       createChild({
         id: 'elin-liv',
@@ -532,6 +581,8 @@ const defaultFamilies: Family[] = [
         firstName: 'Mira',
         avatarUrl: 'https://randomuser.me/api/portraits/women/34.jpg',
         birthDate: '1992-09-08',
+        intro: 'I would love to meet nearby parents before the newborn blur starts, ideally over coffee or a short walk.',
+        isDiscoverable: true,
         interests: ['Coffee walks', 'Baking', 'Books'],
         languages: ['Swedish', 'English'],
         role: 'primary',
@@ -544,7 +595,7 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/mira-3/600/600',
     ],
     homeLocation: requireLocation('vasastan'),
-    summary: 'Expecting a first baby in late summer and hoping to meet nearby parents before the newborn blur starts.',
+    familySummary: 'Expecting a first baby in late summer and hoping to build a few local family connections before things get blurry.',
     children: [],
     expecting: {
       dueMonth: '2026-08',
@@ -557,7 +608,7 @@ const defaultFamilies: Family[] = [
 ];
 
 const initialMessages: Record<string, Message[]> = {
-  'sara-match': [
+  [buildDirectMatchIdInternal(CURRENT_PRIMARY_PARENT_ID, 'sara-primary')]: [
     {
       id: '1',
       senderFamilyId: 'sara',
@@ -581,7 +632,7 @@ const initialMessages: Record<string, Message[]> = {
       createdAt: atMinute(13),
     },
   ],
-  'mira-match': [
+  [buildDirectMatchIdInternal(CURRENT_PRIMARY_PARENT_ID, 'mira-primary')]: [
     {
       id: 'mira-1',
       senderFamilyId: 'mira',
@@ -800,20 +851,20 @@ const defaultPublicEventFilters = (): PublicEventFilters => ({
   selectedActivityTags: [],
 });
 
-const defaultMatchedFamilyIds = ['sara', 'mira'];
-const defaultLikedFamilyIdsByParent: ParentFamilyIdsByParent = {
+const defaultMatchedParentIds = ['sara-primary', 'mira-primary'];
+const defaultLikedParentIdsByParent: ParentIdsByParent = {
   [CURRENT_PRIMARY_PARENT_ID]: [],
 };
-const defaultPassedFamilyIdsByParent: ParentFamilyIdsByParent = {
+const defaultPassedParentIdsByParent: ParentIdsByParent = {
   [CURRENT_PRIMARY_PARENT_ID]: [],
 };
-const defaultMatchedFamilyIdsByParent: ParentFamilyIdsByParent = {
-  [CURRENT_PRIMARY_PARENT_ID]: defaultMatchedFamilyIds,
+const defaultMatchedParentIdsByParent: ParentIdsByParent = {
+  [CURRENT_PRIMARY_PARENT_ID]: defaultMatchedParentIds,
 };
 const initialDirectConversationLastSeenAtByParent: ConversationLastSeenByParent = {
   [CURRENT_PRIMARY_PARENT_ID]: {
-    'sara-match': atMinute(10),
-    'mira-match': atMinute(38),
+    [buildDirectMatchIdInternal(CURRENT_PRIMARY_PARENT_ID, 'sara-primary')]: atMinute(10),
+    [buildDirectMatchIdInternal(CURRENT_PRIMARY_PARENT_ID, 'mira-primary')]: atMinute(38),
   },
 };
 const initialGroupConversationLastSeenAtByParent: Record<string, Record<string, number>> = {
@@ -829,6 +880,14 @@ export const getPrimaryParent = <T extends ParentContainer>(value: T) => getPrim
 
 export const getActiveParent = (draftProfile: DraftProfile) => getActiveParentInternal(draftProfile);
 
+export const getFamilyByParentId = (families: Family[], parentId: string) =>
+  getFamilyByParentIdInternal(families, parentId);
+
+export const buildDirectMatchId = (localParentId: string, remoteParentId: string) =>
+  buildDirectMatchIdInternal(localParentId, remoteParentId);
+
+export const parseDirectMatchId = (matchId: string) => parseDirectMatchIdInternal(matchId);
+
 export const isPrimaryActiveParent = (draftProfile: DraftProfile) => isPrimaryParentSession(draftProfile);
 
 export const hasBornChildren = (value: { children?: ChildProfile[] }) => hasChildrenInternal(value.children);
@@ -841,33 +900,33 @@ export const canParticipateInAudience = (
   audience: GroupPlayDateAudience
 ) => canParticipateInAudienceInternal(value, audience);
 
-export const getActiveLikedFamilyIds = (
+export const getActiveLikedParentIds = (
   draftProfile: DraftProfile,
-  likedFamilyIdsByParent: ParentFamilyIdsByParent
+  likedParentIdsByParent: ParentIdsByParent
 ) => {
   const activeParent = getActiveParentInternal(draftProfile);
-  return activeParent ? getFamilyIdsForParentInternal(likedFamilyIdsByParent, activeParent.id) : [];
+  return activeParent ? getIdsForParentInternal(likedParentIdsByParent, activeParent.id) : [];
 };
 
-export const getActivePassedFamilyIds = (
+export const getActivePassedParentIds = (
   draftProfile: DraftProfile,
-  passedFamilyIdsByParent: ParentFamilyIdsByParent
+  passedParentIdsByParent: ParentIdsByParent
 ) => {
   const activeParent = getActiveParentInternal(draftProfile);
-  return activeParent ? getFamilyIdsForParentInternal(passedFamilyIdsByParent, activeParent.id) : [];
+  return activeParent ? getIdsForParentInternal(passedParentIdsByParent, activeParent.id) : [];
 };
 
-export const getActiveMatchedFamilyIds = (
+export const getActiveMatchedParentIds = (
   draftProfile: DraftProfile,
-  matchedFamilyIdsByParent: ParentFamilyIdsByParent
+  matchedParentIdsByParent: ParentIdsByParent
 ) => {
   const activeParent = getActiveParentInternal(draftProfile);
-  return activeParent ? getFamilyIdsForParentInternal(matchedFamilyIdsByParent, activeParent.id) : [];
+  return activeParent ? getIdsForParentInternal(matchedParentIdsByParent, activeParent.id) : [];
 };
 
-export const getLinkedParentMatchedFamilyIds = (
+export const getLinkedParentMatchedParentIds = (
   draftProfile: DraftProfile,
-  matchedFamilyIdsByParent: ParentFamilyIdsByParent
+  matchedParentIdsByParent: ParentIdsByParent
 ) => {
   const activeParent = getActiveParentInternal(draftProfile);
   const activeParentId = activeParent?.id;
@@ -878,13 +937,34 @@ export const getLinkedParentMatchedFamilyIds = (
       return;
     }
 
-    getFamilyIdsForParentInternal(matchedFamilyIdsByParent, parent.id).forEach((familyId) => {
-      nextValues.add(familyId);
+    getIdsForParentInternal(matchedParentIdsByParent, parent.id).forEach((parentId) => {
+      nextValues.add(parentId);
     });
   });
 
   return [...nextValues];
 };
+
+const getUniqueFamilyIdsForParentIds = (families: Family[], parentIds: string[]) =>
+  [...new Set(parentIds.map((parentId) => getFamilyIdForParentIdInternal(families, parentId)).filter((value): value is string => Boolean(value)))];
+
+export const getActiveLikedFamilyIds = (
+  draftProfile: DraftProfile,
+  likedParentIdsByParent: ParentIdsByParent,
+  families: Family[]
+) => getUniqueFamilyIdsForParentIds(families, getActiveLikedParentIds(draftProfile, likedParentIdsByParent));
+
+export const getActiveMatchedFamilyIds = (
+  draftProfile: DraftProfile,
+  matchedParentIdsByParent: ParentIdsByParent,
+  families: Family[]
+) => getUniqueFamilyIdsForParentIds(families, getActiveMatchedParentIds(draftProfile, matchedParentIdsByParent));
+
+export const getLinkedParentMatchedFamilyIds = (
+  draftProfile: DraftProfile,
+  matchedParentIdsByParent: ParentIdsByParent,
+  families: Family[]
+) => getUniqueFamilyIdsForParentIds(families, getLinkedParentMatchedParentIds(draftProfile, matchedParentIdsByParent));
 
 export const getDirectConversationLastSeenAtForActiveParent = (
   draftProfile: DraftProfile,
@@ -899,9 +979,9 @@ export const useAppStore = create<AppState>((set) => ({
   draftProfile: defaultDraftProfile,
   coParentInvite: null,
   families: defaultFamilies,
-  likedFamilyIdsByParent: defaultLikedFamilyIdsByParent,
-  passedFamilyIdsByParent: defaultPassedFamilyIdsByParent,
-  matchedFamilyIdsByParent: defaultMatchedFamilyIdsByParent,
+  likedParentIdsByParent: defaultLikedParentIdsByParent,
+  passedParentIdsByParent: defaultPassedParentIdsByParent,
+  matchedParentIdsByParent: defaultMatchedParentIdsByParent,
   directConversationLastSeenAtByParent: initialDirectConversationLastSeenAtByParent,
   groupConversationLastSeenAtByParent: initialGroupConversationLastSeenAtByParent,
   messagesByMatch: initialMessages,
@@ -948,7 +1028,7 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       draftProfile: {
         ...state.draftProfile,
-        parents: updateParentList(state.draftProfile.parents, state.draftProfile.primaryParentId, (parent) => ({
+        parents: updateParentList(state.draftProfile.parents, state.draftProfile.activeParentId, (parent) => ({
           ...parent,
           interests: toggle(parent.interests, value),
         })),
@@ -958,7 +1038,7 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       draftProfile: {
         ...state.draftProfile,
-        parents: updateParentList(state.draftProfile.parents, state.draftProfile.primaryParentId, (parent) => ({
+        parents: updateParentList(state.draftProfile.parents, state.draftProfile.activeParentId, (parent) => ({
           ...parent,
           languages: toggle(parent.languages, value),
         })),
@@ -1019,17 +1099,17 @@ export const useAppStore = create<AppState>((set) => ({
       const nextParents = [...state.draftProfile.parents, DEMO_COPARENT];
       return {
         coParentInvite: null,
-        likedFamilyIdsByParent: {
-          ...state.likedFamilyIdsByParent,
-          [DEMO_COPARENT.id]: state.likedFamilyIdsByParent[DEMO_COPARENT.id] ?? [],
+        likedParentIdsByParent: {
+          ...state.likedParentIdsByParent,
+          [DEMO_COPARENT.id]: state.likedParentIdsByParent[DEMO_COPARENT.id] ?? [],
         },
-        passedFamilyIdsByParent: {
-          ...state.passedFamilyIdsByParent,
-          [DEMO_COPARENT.id]: state.passedFamilyIdsByParent[DEMO_COPARENT.id] ?? [],
+        passedParentIdsByParent: {
+          ...state.passedParentIdsByParent,
+          [DEMO_COPARENT.id]: state.passedParentIdsByParent[DEMO_COPARENT.id] ?? [],
         },
-        matchedFamilyIdsByParent: {
-          ...state.matchedFamilyIdsByParent,
-          [DEMO_COPARENT.id]: state.matchedFamilyIdsByParent[DEMO_COPARENT.id] ?? [],
+        matchedParentIdsByParent: {
+          ...state.matchedParentIdsByParent,
+          [DEMO_COPARENT.id]: state.matchedParentIdsByParent[DEMO_COPARENT.id] ?? [],
         },
         directConversationLastSeenAtByParent: {
           ...state.directConversationLastSeenAtByParent,
@@ -1052,9 +1132,9 @@ export const useAppStore = create<AppState>((set) => ({
       const nextParents = state.draftProfile.parents.filter((entry) => entry.id !== parentId);
       const nextGroupSeenByParent = { ...state.groupConversationLastSeenAtByParent };
       const nextDirectSeenByParent = { ...state.directConversationLastSeenAtByParent };
-      const nextLikedByParent = { ...state.likedFamilyIdsByParent };
-      const nextPassedByParent = { ...state.passedFamilyIdsByParent };
-      const nextMatchedByParent = { ...state.matchedFamilyIdsByParent };
+      const nextLikedByParent = { ...state.likedParentIdsByParent };
+      const nextPassedByParent = { ...state.passedParentIdsByParent };
+      const nextMatchedByParent = { ...state.matchedParentIdsByParent };
       delete nextGroupSeenByParent[parentId];
       delete nextDirectSeenByParent[parentId];
       delete nextLikedByParent[parentId];
@@ -1062,9 +1142,9 @@ export const useAppStore = create<AppState>((set) => ({
       delete nextMatchedByParent[parentId];
 
       return {
-        likedFamilyIdsByParent: nextLikedByParent,
-        passedFamilyIdsByParent: nextPassedByParent,
-        matchedFamilyIdsByParent: nextMatchedByParent,
+        likedParentIdsByParent: nextLikedByParent,
+        passedParentIdsByParent: nextPassedByParent,
+        matchedParentIdsByParent: nextMatchedByParent,
         directConversationLastSeenAtByParent: nextDirectSeenByParent,
         groupConversationLastSeenAtByParent: nextGroupSeenByParent,
         draftProfile: {
@@ -1235,9 +1315,9 @@ export const useAppStore = create<AppState>((set) => ({
       draftProfile: defaultDraftProfile,
       coParentInvite: null,
       families: defaultFamilies,
-      likedFamilyIdsByParent: defaultLikedFamilyIdsByParent,
-      passedFamilyIdsByParent: defaultPassedFamilyIdsByParent,
-      matchedFamilyIdsByParent: defaultMatchedFamilyIdsByParent,
+      likedParentIdsByParent: defaultLikedParentIdsByParent,
+      passedParentIdsByParent: defaultPassedParentIdsByParent,
+      matchedParentIdsByParent: defaultMatchedParentIdsByParent,
       directConversationLastSeenAtByParent: initialDirectConversationLastSeenAtByParent,
       groupConversationLastSeenAtByParent: initialGroupConversationLastSeenAtByParent,
       messagesByMatch: initialMessages,
@@ -1246,7 +1326,7 @@ export const useAppStore = create<AppState>((set) => ({
       discoveryFilters: defaultDiscoveryFilters(defaultDraftProfile),
       publicEventFilters: defaultPublicEventFilters(),
     })),
-  likeFamily: (id) =>
+  likeParent: (id) =>
     set((state) => {
       const activeParent = getActiveParentInternal(state.draftProfile);
 
@@ -1254,29 +1334,30 @@ export const useAppStore = create<AppState>((set) => ({
         return state;
       }
 
-      const activeLikedFamilyIds = getFamilyIdsForParentInternal(state.likedFamilyIdsByParent, activeParent.id);
-      const activeMatchedFamilyIds = getFamilyIdsForParentInternal(state.matchedFamilyIdsByParent, activeParent.id);
+      const activeLikedParentIds = getIdsForParentInternal(state.likedParentIdsByParent, activeParent.id);
+      const activeMatchedParentIds = getIdsForParentInternal(state.matchedParentIdsByParent, activeParent.id);
       const alreadyMatchedByAnotherLinkedParent = state.draftProfile.parents.some(
         (parent) =>
           parent.id !== activeParent.id &&
           parent.status === 'active' &&
-          getFamilyIdsForParentInternal(state.matchedFamilyIdsByParent, parent.id).includes(id)
+          getIdsForParentInternal(state.matchedParentIdsByParent, parent.id).includes(id)
       );
       const shouldMatch =
-        alreadyMatchedByAnotherLinkedParent || (['sara', 'mira'].includes(id) && !activeMatchedFamilyIds.includes(id));
+        alreadyMatchedByAnotherLinkedParent ||
+        (['sara-primary', 'sara-coparent', 'mira-primary'].includes(id) && !activeMatchedParentIds.includes(id));
 
       return {
-        likedFamilyIdsByParent: {
-          ...state.likedFamilyIdsByParent,
-          [activeParent.id]: activeLikedFamilyIds.includes(id) ? activeLikedFamilyIds : [...activeLikedFamilyIds, id],
+        likedParentIdsByParent: {
+          ...state.likedParentIdsByParent,
+          [activeParent.id]: activeLikedParentIds.includes(id) ? activeLikedParentIds : [...activeLikedParentIds, id],
         },
-        matchedFamilyIdsByParent: {
-          ...state.matchedFamilyIdsByParent,
-          [activeParent.id]: shouldMatch ? unique([...activeMatchedFamilyIds, id]) : activeMatchedFamilyIds,
+        matchedParentIdsByParent: {
+          ...state.matchedParentIdsByParent,
+          [activeParent.id]: shouldMatch ? unique([...activeMatchedParentIds, id]) : activeMatchedParentIds,
         },
       };
     }),
-  passFamily: (id) =>
+  passParent: (id) =>
     set((state) => {
       const activeParent = getActiveParentInternal(state.draftProfile);
 
@@ -1284,12 +1365,12 @@ export const useAppStore = create<AppState>((set) => ({
         return state;
       }
 
-      const activePassedFamilyIds = getFamilyIdsForParentInternal(state.passedFamilyIdsByParent, activeParent.id);
+      const activePassedParentIds = getIdsForParentInternal(state.passedParentIdsByParent, activeParent.id);
 
       return {
-        passedFamilyIdsByParent: {
-          ...state.passedFamilyIdsByParent,
-          [activeParent.id]: activePassedFamilyIds.includes(id) ? activePassedFamilyIds : [...activePassedFamilyIds, id],
+        passedParentIdsByParent: {
+          ...state.passedParentIdsByParent,
+          [activeParent.id]: activePassedParentIds.includes(id) ? activePassedParentIds : [...activePassedParentIds, id],
         },
       };
     }),

@@ -1,18 +1,21 @@
 import {
   ANY_PUBLIC_EVENT_AGE,
   ANY_PUBLIC_EVENT_AUDIENCE,
+  buildDirectMatchId,
   canParticipateInAudience,
   type ChildProfile,
   type ConversationThread,
   type DraftProfile,
   type ExpectingProfile,
   type Family,
-  getActiveMatchedFamilyIds,
+  getActiveMatchedParentIds,
   getActiveParent,
   getDirectConversationLastSeenAtForActiveParent,
+  getFamilyByParentId,
   type GroupPlayDateAudience,
   hasBornChildren,
   isExpectingFamily,
+  type ParentAccount,
   getPrimaryParent,
   type GroupPlayDate,
   type Message,
@@ -35,7 +38,7 @@ type ConversationThreadInput = {
   currentFamilyId: string;
   draftProfile: DraftProfile;
   directConversationLastSeenAtByParent: Record<string, Record<string, number>>;
-  matchedFamilyIdsByParent: Record<string, string[]>;
+  matchedParentIdsByParent: Record<string, string[]>;
   groupConversationLastSeenAtByParent: Record<string, Record<string, number>>;
   families: Family[];
   messagesByMatch: Record<string, Message[]>;
@@ -62,6 +65,7 @@ export type BirthdayEvent = {
 const unique = (values: string[]) => [...new Set(values)];
 
 const getFamilyPublicParent = (family: Family) => getPrimaryParent(family);
+const getCurrentDiscoveryParent = (draftProfile: DraftProfile) => getActiveParent(draftProfile) ?? getPrimaryParent(draftProfile);
 const getSharedValues = (left: string[] = [], right: string[] = []) => {
   const rightSet = new Set(right);
   return left.filter((value) => rightSet.has(value));
@@ -107,20 +111,32 @@ export const getSharedChildInterests = (draftChildren: ChildProfile[] = [], fami
   return getAllChildInterests(familyChildren).filter((interest) => draftInterests.has(interest));
 };
 
-export const getSharedParentInterests = (draftProfile: DraftProfile, family: Family) =>
-  getSharedValues(getPrimaryParent(draftProfile)?.interests ?? [], getFamilyPublicParent(family)?.interests ?? []);
+export const getSharedParentInterests = (
+  draftProfile: DraftProfile,
+  family: Family,
+  familyParent: ParentAccount | null = getFamilyPublicParent(family)
+) => getSharedValues(getCurrentDiscoveryParent(draftProfile)?.interests ?? [], familyParent?.interests ?? []);
 
-export const getSharedLanguages = (draftProfile: DraftProfile, family: Family) =>
-  getSharedValues(getPrimaryParent(draftProfile)?.languages ?? [], getFamilyPublicParent(family)?.languages ?? []);
+export const getSharedLanguages = (
+  draftProfile: DraftProfile,
+  family: Family,
+  familyParent: ParentAccount | null = getFamilyPublicParent(family)
+) => getSharedValues(getCurrentDiscoveryParent(draftProfile)?.languages ?? [], familyParent?.languages ?? []);
 
 export const getSharedFamilyVibes = (draftProfile: DraftProfile, family: Family) =>
   getSharedValues(draftProfile.familyVibe ?? [], family.familyVibe ?? []);
 
-export const getSharedParentInterestCount = (draftProfile: DraftProfile, family: Family) =>
-  getSharedParentInterests(draftProfile, family).length;
+export const getSharedParentInterestCount = (
+  draftProfile: DraftProfile,
+  family: Family,
+  familyParent: ParentAccount | null = getFamilyPublicParent(family)
+) => getSharedParentInterests(draftProfile, family, familyParent).length;
 
-export const getSharedLanguageCount = (draftProfile: DraftProfile, family: Family) =>
-  getSharedLanguages(draftProfile, family).length;
+export const getSharedLanguageCount = (
+  draftProfile: DraftProfile,
+  family: Family,
+  familyParent: ParentAccount | null = getFamilyPublicParent(family)
+) => getSharedLanguages(draftProfile, family, familyParent).length;
 
 export const getSharedFamilyVibeCount = (draftProfile: DraftProfile, family: Family) =>
   getSharedFamilyVibes(draftProfile, family).length;
@@ -166,12 +182,16 @@ export const isSimilarAgeFamily = (draftChildren: ChildProfile[] = [], familyChi
 export const getFamilySortValue = (draftChildren: ChildProfile[] = [], familyChildren: ChildProfile[] = []) =>
   getAgeGapSortValue(draftChildren, familyChildren);
 
-export const getFamilyFitChips = (draftProfile: DraftProfile, family: Family) => {
+export const getFamilyFitChips = (
+  draftProfile: DraftProfile,
+  family: Family,
+  familyParent: ParentAccount | null = getFamilyPublicParent(family)
+) => {
   const ageFit = getFamilyAgeFitLabel(draftProfile.children ?? [], family.children ?? []);
   const dueMonthFit = getDueMonthFitLabel(draftProfile.expecting, family.expecting);
   const parentFitChips = [
-    getSharedParentInterestCount(draftProfile, family) > 0 ? 'Shared parent interests' : null,
-    getSharedLanguageCount(draftProfile, family) > 0 ? 'Shared language' : null,
+    getSharedParentInterestCount(draftProfile, family, familyParent) > 0 ? 'Shared parent interests' : null,
+    getSharedLanguageCount(draftProfile, family, familyParent) > 0 ? 'Shared language' : null,
     getSharedFamilyVibeCount(draftProfile, family) > 0 ? 'Shared family vibe' : null,
   ].filter((value): value is string => Boolean(value));
 
@@ -392,7 +412,7 @@ export const getConversationThreads = ({
   currentFamilyId,
   draftProfile,
   directConversationLastSeenAtByParent,
-  matchedFamilyIdsByParent,
+  matchedParentIdsByParent,
   groupConversationLastSeenAtByParent,
   families,
   messagesByMatch,
@@ -401,7 +421,7 @@ export const getConversationThreads = ({
 }: ConversationThreadInput): ConversationThread[] => {
   const activeParent = getActiveParent(draftProfile);
   const primaryParent = getPrimaryParent(draftProfile);
-  const activeMatchedFamilyIds = getActiveMatchedFamilyIds(draftProfile, matchedFamilyIdsByParent);
+  const activeMatchedParentIds = getActiveMatchedParentIds(draftProfile, matchedParentIdsByParent);
   const activeDirectConversationLastSeenAt = getDirectConversationLastSeenAtForActiveParent(
     draftProfile,
     directConversationLastSeenAtByParent
@@ -446,32 +466,38 @@ export const getConversationThreads = ({
     ),
   ]);
 
-  const directThreads = Object.entries(messagesByMatch).reduce<ConversationThread[]>((threadsAccumulator, [matchId, messages]) => {
-    const family = families.find((entry) => `${entry.id}-match` === matchId);
-    const publicParent = family ? getFamilyPublicParent(family) : null;
+  const directThreads = activeMatchedParentIds.reduce<ConversationThread[]>((threadsAccumulator, remoteParentId) => {
+    if (!activeParent) {
+      return threadsAccumulator;
+    }
 
-    if (!family || !publicParent || messages.length === 0 || !activeMatchedFamilyIds.includes(family.id)) {
+    const family = getFamilyByParentId(families, remoteParentId);
+    const remoteParent = family ? family.parents.find((parent) => parent.id === remoteParentId) : null;
+    const matchId = buildDirectMatchId(activeParent.id, remoteParentId);
+    const messages = messagesByMatch[matchId] ?? [];
+
+    if (!family || !remoteParent || messages.length === 0) {
       return threadsAccumulator;
     }
 
     const lastMessage = messages[messages.length - 1];
     const lastSeenAt = activeDirectConversationLastSeenAt[matchId] ?? 0;
     const unreadCount = messages.filter(
-      (message) => message.senderParentId !== activeParent?.id && message.createdAt > lastSeenAt
+      (message) => message.senderParentId !== activeParent.id && message.createdAt > lastSeenAt
     ).length;
 
     threadsAccumulator.push({
       id: matchId,
       kind: 'direct',
-      title: publicParent.firstName,
-      subtitle: 'Direct chat',
+      title: remoteParent.firstName,
+      subtitle: getFamilyChildrenSummary(family.children ?? [], family.expecting),
       lastMessagePreview: buildConversationPreview(lastMessage),
       lastActivityAt: lastMessage.createdAt,
       route: `/chat/${matchId}`,
       badgeLabel: 'Direct',
       badgeTone: 'direct',
-      avatarNames: [publicParent.firstName],
-      avatarUrls: publicParent.avatarUrl ? [publicParent.avatarUrl] : [],
+      avatarNames: [remoteParent.firstName],
+      avatarUrls: remoteParent.avatarUrl ? [remoteParent.avatarUrl] : [],
       participantCount: 2,
       unreadCount,
     });

@@ -70,7 +70,7 @@ export default function CreateGroupScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const draftProfile = useAppStore((state) => state.draftProfile);
   const families = useAppStore((state) => state.families);
-  const matchedFamilyIdsByParent = useAppStore((state) => state.matchedFamilyIdsByParent);
+  const matchedParentIdsByParent = useAppStore((state) => state.matchedParentIdsByParent);
   const createGroupPlayDate = useAppStore((state) => state.createGroupPlayDate);
   const activeParent = getActiveParent(draftProfile);
   const canHostChildrenEvents = canParticipateInAudience(draftProfile, 'children');
@@ -80,8 +80,8 @@ export default function CreateGroupScreen() {
   const canHostSelectedAudience = canParticipateInAudience(draftProfile, form.audience);
   const matchedFamilyIds = [
     ...new Set([
-      ...getActiveMatchedFamilyIds(draftProfile, matchedFamilyIdsByParent),
-      ...getLinkedParentMatchedFamilyIds(draftProfile, matchedFamilyIdsByParent),
+      ...getActiveMatchedFamilyIds(draftProfile, matchedParentIdsByParent, families),
+      ...getLinkedParentMatchedFamilyIds(draftProfile, matchedParentIdsByParent, families),
     ]),
   ];
   const headerTitleOpacity = scrollY.interpolate({

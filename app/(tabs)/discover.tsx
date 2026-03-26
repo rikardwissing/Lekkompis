@@ -17,6 +17,7 @@ import {
   type FamilySwipeStackHandle,
   type FamilySwipeStackItem,
 } from '@/components/discovery/FamilySwipeStack';
+import { MainAppHeader } from '@/components/navigation/MainAppHeader';
 import { PublicEventCard } from '@/components/discovery/PublicEventCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -37,12 +38,14 @@ import {
   ANY_PUBLIC_EVENT_AGE,
   ANY_PUBLIC_EVENT_AUDIENCE,
   type DistanceRadiusKm,
-  getActiveLikedFamilyIds,
-  getActiveMatchedFamilyIds,
-  getActivePassedFamilyIds,
+  getActiveLikedParentIds,
+  getActiveMatchedParentIds,
+  getActivePassedParentIds,
   hasBornChildren,
   isExpectingFamily,
   getPrimaryParent,
+  type Family,
+  type ParentAccount,
   useAppStore,
 } from '@/store/app-store';
 import {
@@ -68,6 +71,12 @@ import { getDistanceKm, isWithinRadius } from '@/utils/location';
 
 type DiscoverMode = 'families' | 'events';
 type DecisionDirection = 'left' | 'right';
+type DiscoverableParentEntry = {
+  family: Family;
+  familyIndex: number;
+  parent: ParentAccount;
+  parentIndex: number;
+};
 
 const formatRadiusLabel = (radiusKm: DistanceRadiusKm) =>
   radiusKm === null ? 'Any distance' : `Within ${radiusKm} km`;
@@ -173,22 +182,22 @@ export default function DiscoverScreen() {
   const [mode, setMode] = useState<DiscoverMode>('families');
   const [showFamilyFilters, setShowFamilyFilters] = useState(false);
   const [showEventFilters, setShowEventFilters] = useState(false);
-  const [deckFamilyIds, setDeckFamilyIds] = useState<string[]>([]);
-  const [detailFamilyId, setDetailFamilyId] = useState<string | null>(null);
+  const [deckParentIds, setDeckParentIds] = useState<string[]>([]);
+  const [detailParentId, setDetailParentId] = useState<string | null>(null);
   const [decisionPending, setDecisionPending] = useState(false);
-  const [matchOverlayFamilyId, setMatchOverlayFamilyId] = useState<string | null>(null);
+  const [matchOverlayParentId, setMatchOverlayParentId] = useState<string | null>(null);
   const stackRef = useRef<FamilySwipeStackHandle | null>(null);
   const currentFamilyId = useAppStore((state) => state.currentFamilyId);
   const families = useAppStore((state) => state.families);
-  const likedFamilyIdsByParent = useAppStore((state) => state.likedFamilyIdsByParent);
-  const matchedFamilyIdsByParent = useAppStore((state) => state.matchedFamilyIdsByParent);
-  const passedFamilyIdsByParent = useAppStore((state) => state.passedFamilyIdsByParent);
+  const likedParentIdsByParent = useAppStore((state) => state.likedParentIdsByParent);
+  const matchedParentIdsByParent = useAppStore((state) => state.matchedParentIdsByParent);
+  const passedParentIdsByParent = useAppStore((state) => state.passedParentIdsByParent);
   const draftProfile = useAppStore((state) => state.draftProfile);
   const discoveryFilters = useAppStore((state) => state.discoveryFilters);
   const publicEventFilters = useAppStore((state) => state.publicEventFilters);
   const groupPlayDates = useAppStore((state) => state.groupPlayDates);
-  const likeFamily = useAppStore((state) => state.likeFamily);
-  const passFamily = useAppStore((state) => state.passFamily);
+  const likeParent = useAppStore((state) => state.likeParent);
+  const passParent = useAppStore((state) => state.passParent);
   const setDiscoveryRadius = useAppStore((state) => state.setDiscoveryRadius);
   const setDiscoveryAvailability = useAppStore((state) => state.setDiscoveryAvailability);
   const setDiscoveryFamilyStage = useAppStore((state) => state.setDiscoveryFamilyStage);
@@ -202,9 +211,9 @@ export default function DiscoverScreen() {
   const resetPublicEventFilters = useAppStore((state) => state.resetPublicEventFilters);
   const requestToJoinGroupPlayDate = useAppStore((state) => state.requestToJoinGroupPlayDate);
   const primaryParent = getPrimaryParent(draftProfile);
-  const likedFamilyIds = getActiveLikedFamilyIds(draftProfile, likedFamilyIdsByParent);
-  const matchedFamilyIds = getActiveMatchedFamilyIds(draftProfile, matchedFamilyIdsByParent);
-  const passedFamilyIds = getActivePassedFamilyIds(draftProfile, passedFamilyIdsByParent);
+  const likedParentIds = getActiveLikedParentIds(draftProfile, likedParentIdsByParent);
+  const matchedParentIds = getActiveMatchedParentIds(draftProfile, matchedParentIdsByParent);
+  const passedParentIds = getActivePassedParentIds(draftProfile, passedParentIdsByParent);
 
   const draftChildren = draftProfile.children ?? [];
   const similarAgeOnly = discoveryFilters.similarAgeOnly ?? false;
@@ -237,17 +246,22 @@ export default function DiscoverScreen() {
     [currentFamilyId, families, primaryParent]
   );
 
-  const visibleFamilies = useMemo(
+  const visibleParentEntries = useMemo(
     () =>
       families
-        .map((family, index) => ({
-          distanceKm: getDistanceKm(draftProfile.homeLocation, family.homeLocation),
-          family,
-          index,
-        }))
-        .filter(({ family }) => {
+        .flatMap((family, familyIndex) =>
+          family.parents.map((parent, parentIndex) => ({
+            distanceKm: getDistanceKm(draftProfile.homeLocation, family.homeLocation),
+            family,
+            familyIndex,
+            parent,
+            parentIndex,
+          }))
+        )
+        .filter(({ family, parent }) => {
           const familyChildren = family.children ?? [];
-          if (passedFamilyIds.includes(family.id)) return false;
+          if (!parent.isDiscoverable) return false;
+          if (passedParentIds.includes(parent.id)) return false;
           if (!isWithinRadius(draftProfile.homeLocation, family.homeLocation, discoveryFilters.radiusKm)) return false;
           if (discoveryFilters.availability !== 'Any' && !family.availability.includes(discoveryFilters.availability)) return false;
           if (discoveryFilters.familyStage === 'expecting' && !isExpectingFamily(family)) return false;
@@ -298,13 +312,15 @@ export default function DiscoverScreen() {
           }
 
           const sharedParentInterestDelta =
-            getSharedParentInterestCount(draftProfile, right.family) - getSharedParentInterestCount(draftProfile, left.family);
+            getSharedParentInterestCount(draftProfile, right.family, right.parent) -
+            getSharedParentInterestCount(draftProfile, left.family, left.parent);
           if (sharedParentInterestDelta !== 0) {
             return sharedParentInterestDelta;
           }
 
           const sharedLanguageDelta =
-            getSharedLanguageCount(draftProfile, right.family) - getSharedLanguageCount(draftProfile, left.family);
+            getSharedLanguageCount(draftProfile, right.family, right.parent) -
+            getSharedLanguageCount(draftProfile, left.family, left.parent);
           if (sharedLanguageDelta !== 0) {
             return sharedLanguageDelta;
           }
@@ -315,33 +331,43 @@ export default function DiscoverScreen() {
             return sharedVibeDelta;
           }
 
-          return left.index - right.index;
+          if (left.familyIndex !== right.familyIndex) {
+            return left.familyIndex - right.familyIndex;
+          }
+
+          return left.parentIndex - right.parentIndex;
         })
-        .map(({ family }) => family),
-    [discoveryFilters, draftChildren, draftProfile, families, passedFamilyIds, showChildDiscoveryControls, similarAgeOnly]
+        .map(({ family, familyIndex, parent, parentIndex }) => ({
+          family,
+          familyIndex,
+          parent,
+          parentIndex,
+        })),
+    [discoveryFilters, draftChildren, draftProfile, families, passedParentIds, showChildDiscoveryControls, similarAgeOnly]
   );
 
-  const familyQueue = useMemo(
-    () => visibleFamilies.filter((family) => !likedFamilyIds.includes(family.id) && !matchedFamilyIds.includes(family.id)),
-    [likedFamilyIds, matchedFamilyIds, visibleFamilies]
+  const parentQueue = useMemo(
+    () => visibleParentEntries.filter((entry) => !likedParentIds.includes(entry.parent.id) && !matchedParentIds.includes(entry.parent.id)),
+    [likedParentIds, matchedParentIds, visibleParentEntries]
   );
-  const familyQueueIds = useMemo(() => familyQueue.map((family) => family.id), [familyQueue]);
-  const familyLookup = useMemo(
-    () => new Map(families.map((family) => [family.id, family])),
-    [families]
+  const parentQueueIds = useMemo(() => parentQueue.map((entry) => entry.parent.id), [parentQueue]);
+  const parentLookup = useMemo(
+    () => new Map(visibleParentEntries.map((entry) => [entry.parent.id, entry])),
+    [visibleParentEntries]
   );
-  const deckFamilies = useMemo(
-    () => deckFamilyIds.map((familyId) => familyLookup.get(familyId)).filter((family): family is typeof families[number] => Boolean(family)),
-    [deckFamilyIds, familyLookup]
+  const deckParents = useMemo(
+    () =>
+      deckParentIds
+        .map((parentId) => parentLookup.get(parentId))
+        .filter((entry): entry is DiscoverableParentEntry => Boolean(entry)),
+    [deckParentIds, parentLookup]
   );
-  const activeFamily = deckFamilies[0] ?? null;
-  const detailFamily =
-    (detailFamilyId ? familyLookup.get(detailFamilyId) : null) ??
-    activeFamily;
-  const matchFamily = matchOverlayFamilyId
-    ? families.find((family) => family.id === matchOverlayFamilyId) ?? null
-    : null;
-  const matchParent = matchFamily ? getPrimaryParent(matchFamily) : null;
+  const activeParentEntry = deckParents[0] ?? null;
+  const detailParentEntry =
+    (detailParentId ? parentLookup.get(detailParentId) : null) ??
+    activeParentEntry;
+  const matchParentEntry = matchOverlayParentId ? parentLookup.get(matchOverlayParentId) ?? null : null;
+  const matchParent = matchParentEntry?.parent ?? null;
 
   const visiblePublicEvents = useMemo(
     () =>
@@ -367,59 +393,59 @@ export default function DiscoverScreen() {
     publicEventFilters.selectedActivityTags.length;
 
   const decisionDisabled =
-    !deckFamilies[0] || decisionPending || showFamilyFilters || Boolean(detailFamilyId) || Boolean(matchOverlayFamilyId);
-  const filterButtonDisabled = decisionPending || Boolean(detailFamilyId) || Boolean(matchOverlayFamilyId);
+    !deckParents[0] || decisionPending || showFamilyFilters || Boolean(detailParentId) || Boolean(matchOverlayParentId);
+  const filterButtonDisabled = decisionPending || Boolean(detailParentId) || Boolean(matchOverlayParentId);
   const moreButtonDisabled =
-    !activeFamily || decisionPending || showFamilyFilters || Boolean(detailFamilyId) || Boolean(matchOverlayFamilyId);
+    !activeParentEntry || decisionPending || showFamilyFilters || Boolean(detailParentId) || Boolean(matchOverlayParentId);
 
   useEffect(() => {
     if (mode !== 'families') {
       setShowFamilyFilters(false);
-      setDetailFamilyId(null);
+      setDetailParentId(null);
       setDecisionPending(false);
-      setDeckFamilyIds(familyQueueIds);
+      setDeckParentIds(parentQueueIds);
     }
-  }, [familyQueueIds, mode]);
+  }, [mode, parentQueueIds]);
 
   useEffect(() => {
-    setDeckFamilyIds((previousIds) => {
-      const keptIds = previousIds.filter((familyId) => familyQueueIds.includes(familyId));
-      const appendedIds = familyQueueIds.filter((familyId) => !keptIds.includes(familyId));
+    setDeckParentIds((previousIds) => {
+      const keptIds = previousIds.filter((parentId) => parentQueueIds.includes(parentId));
+      const appendedIds = parentQueueIds.filter((parentId) => !keptIds.includes(parentId));
       return [...keptIds, ...appendedIds];
     });
-  }, [familyQueueIds]);
+  }, [parentQueueIds]);
 
   useEffect(() => {
-    if (deckFamilies.length === 0) {
-      setDetailFamilyId(null);
+    if (deckParents.length === 0) {
+      setDetailParentId(null);
     }
-  }, [deckFamilies.length]);
+  }, [deckParents.length]);
 
   const handleDecisionStart = useCallback(() => {
     setDecisionPending(true);
   }, []);
 
   const handleDecision = useCallback(
-    (familyId: string, decision: 'pass' | 'like') => {
-      setDeckFamilyIds((previousIds) => previousIds.filter((id) => id !== familyId));
+    (parentId: string, decision: 'pass' | 'like') => {
+      setDeckParentIds((previousIds) => previousIds.filter((id) => id !== parentId));
 
-      const wasMatched = matchedFamilyIds.includes(familyId);
+      const wasMatched = matchedParentIds.includes(parentId);
 
       if (decision === 'like') {
-        likeFamily(familyId);
+        likeParent(parentId);
         const nextState = useAppStore.getState();
-        const nextMatchedFamilyIds = getActiveMatchedFamilyIds(nextState.draftProfile, nextState.matchedFamilyIdsByParent);
+        const nextMatchedParentIds = getActiveMatchedParentIds(nextState.draftProfile, nextState.matchedParentIdsByParent);
 
-        if (!wasMatched && nextMatchedFamilyIds.includes(familyId)) {
-          setMatchOverlayFamilyId(familyId);
+        if (!wasMatched && nextMatchedParentIds.includes(parentId)) {
+          setMatchOverlayParentId(parentId);
         }
       } else {
-        passFamily(familyId);
+        passParent(parentId);
       }
 
       setDecisionPending(false);
     },
-    [likeFamily, matchedFamilyIds, passFamily]
+    [likeParent, matchedParentIds, passParent]
   );
 
   const triggerDecision = useCallback(
@@ -438,23 +464,23 @@ export default function DiscoverScreen() {
   );
 
   const renderFamilyCard = useCallback(
-    (family: typeof activeFamily, preview = false) => {
-      if (!family) {
+    (entry: DiscoverableParentEntry | null, preview = false) => {
+      if (!entry) {
         return null;
       }
 
-      const publicParent = getPrimaryParent(family);
+      const { family, parent } = entry;
 
       return (
         <FamilyDiscoveryHeroCard
-          key={family.id}
-          avatarUrl={publicParent?.avatarUrl}
+          key={parent.id}
+          avatarUrl={parent.avatarUrl}
           distanceLabel={getFamilyDistanceLabel(draftProfile, family)}
           familySummary={getFamilyChildrenSummary(family.children ?? [], family.expecting)}
-          fitChips={getFamilyFitChips(draftProfile, family)}
-          intro={family.summary}
-          parentName={publicParent?.firstName ?? 'Parent'}
-          photoUrl={family.photoUrls[0] ?? publicParent?.avatarUrl}
+          fitChips={getFamilyFitChips(draftProfile, family, parent)}
+          intro={parent.intro}
+          parentName={parent.firstName}
+          photoUrl={family.photoUrls[0] ?? parent.avatarUrl}
           preview={preview}
         />
       );
@@ -464,29 +490,29 @@ export default function DiscoverScreen() {
 
   const stackCards = useMemo<FamilySwipeStackItem[]>(
     () =>
-      deckFamilies.slice(0, 3).map((family, index) => ({
-        id: family.id,
-        node: renderFamilyCard(family, index > 0),
+      deckParents.slice(0, 3).map((entry, index) => ({
+        id: entry.parent.id,
+        node: renderFamilyCard(entry, index > 0),
       })),
-    [deckFamilies, renderFamilyCard]
+    [deckParents, renderFamilyCard]
   );
 
   const familyEmptyState = useMemo<FamilySwipeStackEmptyState>(
     () =>
-      visibleFamilies.length === 0
+      visibleParentEntries.length === 0
         ? {
-            title: 'No families match these filters',
+            title: 'No parents match these filters',
             body: 'Try broadening the family stage, distance, or availability so the prototype can show more nearby parents again.',
             actionLabel: 'Reset filters',
             onAction: resetDiscoveryFilters,
           }
         : {
-            title: 'No more families to review right now',
+            title: 'No more parents to review right now',
             body: 'Your current likes and matches have moved on to Connections. You can keep browsing later or open your existing conversations now.',
             actionLabel: 'Open connections',
             onAction: () => router.push('/(tabs)/connections'),
           },
-    [resetDiscoveryFilters, visibleFamilies.length]
+    [resetDiscoveryFilters, visibleParentEntries.length]
   );
 
   const renderEventsMode = () => (
@@ -652,14 +678,14 @@ export default function DiscoverScreen() {
   );
 
   return (
-    <Screen contentStyle={styles.screenContent} edges={['top', 'left', 'right']}>
+    <Screen contentStyle={styles.screenContent} edges={['top', 'left', 'right']} header={<MainAppHeader />}>
       <View style={styles.root}>
         {mode === 'families' ? (
           <View style={styles.familyMode}>
             <View style={styles.deckArea}>
               <FamilySwipeStack
                 ref={stackRef}
-                disabled={decisionPending || showFamilyFilters || Boolean(detailFamilyId) || Boolean(matchOverlayFamilyId)}
+                disabled={decisionPending || showFamilyFilters || Boolean(detailParentId) || Boolean(matchOverlayParentId)}
                 emptyState={familyEmptyState}
                 items={stackCards}
                 onDecision={handleDecision}
@@ -674,7 +700,7 @@ export default function DiscoverScreen() {
         <View pointerEvents="box-none" style={styles.topOverlay}>
           {mode === 'families' ? (
             <OverlayIconButton
-              accessibilityLabel="Open family filters"
+              accessibilityLabel="Open discovery filters"
               badgeCount={familyFilterCount}
               disabled={filterButtonDisabled}
               iconName="options-outline"
@@ -686,24 +712,24 @@ export default function DiscoverScreen() {
 
           <View style={styles.modeSwitchShell}>
             <View style={styles.segmentRow}>
-              <SegmentButton active={mode === 'families'} label="Families" onPress={() => setMode('families')} />
+              <SegmentButton active={mode === 'families'} label="Parents" onPress={() => setMode('families')} />
               <SegmentButton active={mode === 'events'} label="Events" onPress={() => setMode('events')} />
             </View>
           </View>
 
           {mode === 'families' ? (
             <OverlayIconButton
-              accessibilityLabel={activeFamily ? `Open more information about ${getPrimaryParent(activeFamily)?.firstName ?? 'this family'}` : 'Open more information'}
+              accessibilityLabel={activeParentEntry ? `Open more information about ${activeParentEntry.parent.firstName}` : 'Open more information'}
               disabled={moreButtonDisabled}
               iconName="ellipsis-horizontal"
-              onPress={() => setDetailFamilyId(activeFamily?.id ?? null)}
+              onPress={() => setDetailParentId(activeParentEntry?.parent.id ?? null)}
             />
           ) : (
             <View style={styles.overlaySideSpacer} />
           )}
         </View>
 
-        {mode === 'families' && deckFamilies.length > 0 ? (
+        {mode === 'families' && deckParents.length > 0 ? (
           <View pointerEvents="box-none" style={styles.bottomOverlay}>
             <View style={styles.actionBar}>
               <DecisionButton
@@ -726,7 +752,7 @@ export default function DiscoverScreen() {
 
       <DiscoveryBottomSheet
         onClose={() => setShowFamilyFilters(false)}
-        title="Family filters"
+        title="Discovery filters"
         visible={showFamilyFilters}
       >
         <ScrollView
@@ -807,24 +833,25 @@ export default function DiscoverScreen() {
 
       <FamilyDetailSheet
         draftProfile={draftProfile}
-        family={detailFamily}
-        onClose={() => setDetailFamilyId(null)}
+        family={detailParentEntry?.family ?? null}
+        parent={detailParentEntry?.parent ?? null}
+        onClose={() => setDetailParentId(null)}
         onOpenProfile={() => {
-          const familyId = detailFamily?.id;
-          setDetailFamilyId(null);
+          const parentId = detailParentEntry?.parent.id;
+          setDetailParentId(null);
 
-          if (familyId) {
-            router.push(`/family/${familyId}`);
+          if (parentId) {
+            router.push(`/parent/${parentId}`);
           }
         }}
-        visible={Boolean(detailFamilyId && detailFamily)}
+        visible={Boolean(detailParentId && detailParentEntry)}
       />
 
-      {matchFamily && matchParent ? (
+      {matchParent ? (
         <View pointerEvents="box-none" style={styles.matchOverlayRoot}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => setMatchOverlayFamilyId(null)}
+            onPress={() => setMatchOverlayParentId(null)}
             style={styles.matchBackdrop}
           />
           <View style={styles.matchCard}>
@@ -840,13 +867,13 @@ export default function DiscoverScreen() {
             </Text>
             <View style={styles.matchActions}>
               <View style={styles.flex}>
-                <Button label="Keep browsing" variant="secondary" onPress={() => setMatchOverlayFamilyId(null)} />
+                <Button label="Keep browsing" variant="secondary" onPress={() => setMatchOverlayParentId(null)} />
               </View>
               <View style={styles.flex}>
                 <Button
                   label="Open connections"
                   onPress={() => {
-                    setMatchOverlayFamilyId(null);
+                    setMatchOverlayParentId(null);
                     router.push('/(tabs)/connections');
                   }}
                 />

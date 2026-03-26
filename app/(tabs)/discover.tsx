@@ -1,9 +1,24 @@
-import { useMemo, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { MainAppHeader } from '@/components/navigation/MainAppHeader';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { DiscoveryBottomSheet } from '@/components/discovery/DiscoveryBottomSheet';
+import { FamilyDetailSheet } from '@/components/discovery/FamilyDetailSheet';
+import { FamilyDiscoveryHeroCard } from '@/components/discovery/FamilyDiscoveryHeroCard';
+import {
+  FamilySwipeStack,
+  type FamilySwipeStackEmptyState,
+  type FamilySwipeStackHandle,
+  type FamilySwipeStackItem,
+} from '@/components/discovery/FamilySwipeStack';
 import { PublicEventCard } from '@/components/discovery/PublicEventCard';
-import { FamilyCard } from '@/components/discovery/FamilyCard';
+import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
@@ -33,6 +48,7 @@ import {
 import {
   getDueMonthGapSortValue,
   getDiscoverablePublicEvents,
+  getFamilyChildrenSummary,
   getFamilyDistanceLabel,
   getFamilyFitChips,
   getGroupDistanceLabel,
@@ -45,11 +61,13 @@ import {
   isSimilarAgeFamily,
 } from '@/store/derived';
 import { colors } from '@/theme/colors';
+import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 import { getAllChildInterests } from '@/utils/birthdays';
 import { getDistanceKm, isWithinRadius } from '@/utils/location';
 
 type DiscoverMode = 'families' | 'events';
+type DecisionDirection = 'left' | 'right';
 
 const formatRadiusLabel = (radiusKm: DistanceRadiusKm) =>
   radiusKm === null ? 'Any distance' : `Within ${radiusKm} km`;
@@ -64,16 +82,102 @@ function SegmentButton({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.segmentButton, active ? styles.segmentButtonActive : null, pressed ? styles.pressed : null]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.segmentButton,
+        active ? styles.segmentButtonActive : null,
+        pressed ? styles.pressed : null,
+      ]}
+    >
       <Text style={[styles.segmentButtonText, active ? styles.segmentButtonTextActive : null]}>{label}</Text>
     </Pressable>
   );
 }
 
+function DecisionButton({
+  disabled = false,
+  iconName,
+  label,
+  onPress,
+  tone = 'neutral',
+}: {
+  disabled?: boolean;
+  iconName: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  tone?: 'neutral' | 'positive';
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.decisionButton,
+        tone === 'positive' ? styles.decisionButtonPositive : null,
+        disabled ? styles.disabled : null,
+        pressed && !disabled ? styles.pressed : null,
+      ]}
+    >
+      <Ionicons
+        color={tone === 'positive' ? colors.surface : colors.text}
+        name={iconName}
+        size={18}
+      />
+      <Text style={[styles.decisionButtonText, tone === 'positive' ? styles.decisionButtonTextPositive : null]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function OverlayIconButton({
+  accessibilityLabel,
+  badgeCount,
+  disabled = false,
+  iconName,
+  onPress,
+}: {
+  accessibilityLabel: string;
+  badgeCount?: number;
+  disabled?: boolean;
+  iconName: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.overlayIconButton,
+        disabled ? styles.disabled : null,
+        pressed && !disabled ? styles.pressed : null,
+      ]}
+    >
+      <Ionicons color={colors.surface} name={iconName} size={18} />
+      {badgeCount && badgeCount > 0 ? (
+        <View style={styles.overlayBadge}>
+          <Text style={styles.overlayBadgeText}>{badgeCount}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
 export default function DiscoverScreen() {
-  const [showFilters, setShowFilters] = useState(false);
   const [mode, setMode] = useState<DiscoverMode>('families');
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const [showFamilyFilters, setShowFamilyFilters] = useState(false);
+  const [showEventFilters, setShowEventFilters] = useState(false);
+  const [deckFamilyIds, setDeckFamilyIds] = useState<string[]>([]);
+  const [detailFamilyId, setDetailFamilyId] = useState<string | null>(null);
+  const [decisionPending, setDecisionPending] = useState(false);
+  const [matchOverlayFamilyId, setMatchOverlayFamilyId] = useState<string | null>(null);
+  const stackRef = useRef<FamilySwipeStackHandle | null>(null);
   const currentFamilyId = useAppStore((state) => state.currentFamilyId);
   const families = useAppStore((state) => state.families);
   const likedFamilyIdsByParent = useAppStore((state) => state.likedFamilyIdsByParent);
@@ -111,14 +215,23 @@ export default function DiscoverScreen() {
       ? expectingActivityOptions
       : publicEventFilters.audience === 'children'
         ? groupActivityOptions
-        : [...groupActivityOptions, ...expectingActivityOptions.filter((option) => !groupActivityOptions.includes(option))];
+        : [
+            ...groupActivityOptions,
+            ...expectingActivityOptions.filter((option) => !groupActivityOptions.includes(option)),
+          ];
   const familyById = useMemo(
     () =>
       Object.fromEntries([
-        [currentFamilyId, { parentName: primaryParent?.firstName ?? 'Parent', avatarUrl: primaryParent?.avatarUrl }],
+        [
+          currentFamilyId,
+          { parentName: primaryParent?.firstName ?? 'Parent', avatarUrl: primaryParent?.avatarUrl },
+        ],
         ...families.map((family) => {
           const publicParent = getPrimaryParent(family);
-          return [family.id, { parentName: publicParent?.firstName ?? 'Parent', avatarUrl: publicParent?.avatarUrl }] as const;
+          return [
+            family.id,
+            { parentName: publicParent?.firstName ?? 'Parent', avatarUrl: publicParent?.avatarUrl },
+          ] as const;
         }),
       ]),
     [currentFamilyId, families, primaryParent]
@@ -208,6 +321,28 @@ export default function DiscoverScreen() {
     [discoveryFilters, draftChildren, draftProfile, families, passedFamilyIds, showChildDiscoveryControls, similarAgeOnly]
   );
 
+  const familyQueue = useMemo(
+    () => visibleFamilies.filter((family) => !likedFamilyIds.includes(family.id) && !matchedFamilyIds.includes(family.id)),
+    [likedFamilyIds, matchedFamilyIds, visibleFamilies]
+  );
+  const familyQueueIds = useMemo(() => familyQueue.map((family) => family.id), [familyQueue]);
+  const familyLookup = useMemo(
+    () => new Map(families.map((family) => [family.id, family])),
+    [families]
+  );
+  const deckFamilies = useMemo(
+    () => deckFamilyIds.map((familyId) => familyLookup.get(familyId)).filter((family): family is typeof families[number] => Boolean(family)),
+    [deckFamilyIds, familyLookup]
+  );
+  const activeFamily = deckFamilies[0] ?? null;
+  const detailFamily =
+    (detailFamilyId ? familyLookup.get(detailFamilyId) : null) ??
+    activeFamily;
+  const matchFamily = matchOverlayFamilyId
+    ? families.find((family) => family.id === matchOverlayFamilyId) ?? null
+    : null;
+  const matchParent = matchFamily ? getPrimaryParent(matchFamily) : null;
+
   const visiblePublicEvents = useMemo(
     () =>
       getDiscoverablePublicEvents({
@@ -230,275 +365,240 @@ export default function DiscoverScreen() {
     (publicEventFilters.audience === ANY_PUBLIC_EVENT_AUDIENCE ? 0 : 1) +
     (publicEventFilters.audience === 'children' && publicEventFilters.ageRange !== ANY_PUBLIC_EVENT_AGE ? 1 : 0) +
     publicEventFilters.selectedActivityTags.length;
-  const pendingCount = likedFamilyIds.filter((familyId) => !matchedFamilyIds.includes(familyId)).length;
-  const ownershipChipLabel =
-    mode === 'families' ? 'Likes and matches stay with each parent' : 'Public events are shared with co-parents';
 
-  const heroCopy =
-    mode === 'families'
-      ? familyFilterCount === 0
-        ? `${visibleFamilies.length} nearby families are currently in view.`
-        : `${visibleFamilies.length} nearby families match ${familyFilterCount} active filter${familyFilterCount === 1 ? '' : 's'}.`
-      : publicEventFilterCount === 0
-        ? `${visiblePublicEvents.length} public events are currently discoverable nearby.`
-        : `${visiblePublicEvents.length} public events match ${publicEventFilterCount} active filter${publicEventFilterCount === 1 ? '' : 's'}.`;
-  const headerTitleOpacity = scrollY.interpolate({
-    inputRange: [24, 92],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
+  const decisionDisabled =
+    !deckFamilies[0] || decisionPending || showFamilyFilters || Boolean(detailFamilyId) || Boolean(matchOverlayFamilyId);
+  const filterButtonDisabled = decisionPending || Boolean(detailFamilyId) || Boolean(matchOverlayFamilyId);
+  const moreButtonDisabled =
+    !activeFamily || decisionPending || showFamilyFilters || Boolean(detailFamilyId) || Boolean(matchOverlayFamilyId);
 
-  return (
-    <Screen
-      header={<MainAppHeader title="Discover" titleOpacity={headerTitleOpacity} />}
-      scroll
-      onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-        useNativeDriver: true,
-      })}
+  useEffect(() => {
+    if (mode !== 'families') {
+      setShowFamilyFilters(false);
+      setDetailFamilyId(null);
+      setDecisionPending(false);
+      setDeckFamilyIds(familyQueueIds);
+    }
+  }, [familyQueueIds, mode]);
+
+  useEffect(() => {
+    setDeckFamilyIds((previousIds) => {
+      const keptIds = previousIds.filter((familyId) => familyQueueIds.includes(familyId));
+      const appendedIds = familyQueueIds.filter((familyId) => !keptIds.includes(familyId));
+      return [...keptIds, ...appendedIds];
+    });
+  }, [familyQueueIds]);
+
+  useEffect(() => {
+    if (deckFamilies.length === 0) {
+      setDetailFamilyId(null);
+    }
+  }, [deckFamilies.length]);
+
+  const handleDecisionStart = useCallback(() => {
+    setDecisionPending(true);
+  }, []);
+
+  const handleDecision = useCallback(
+    (familyId: string, decision: 'pass' | 'like') => {
+      setDeckFamilyIds((previousIds) => previousIds.filter((id) => id !== familyId));
+
+      const wasMatched = matchedFamilyIds.includes(familyId);
+
+      if (decision === 'like') {
+        likeFamily(familyId);
+        const nextState = useAppStore.getState();
+        const nextMatchedFamilyIds = getActiveMatchedFamilyIds(nextState.draftProfile, nextState.matchedFamilyIdsByParent);
+
+        if (!wasMatched && nextMatchedFamilyIds.includes(familyId)) {
+          setMatchOverlayFamilyId(familyId);
+        }
+      } else {
+        passFamily(familyId);
+      }
+
+      setDecisionPending(false);
+    },
+    [likeFamily, matchedFamilyIds, passFamily]
+  );
+
+  const triggerDecision = useCallback(
+    (direction: DecisionDirection) => {
+      if (decisionDisabled || !stackRef.current) {
+        return;
+      }
+
+      const started = direction === 'right' ? stackRef.current.swipeRight() : stackRef.current.swipeLeft();
+
+      if (started) {
+        setDecisionPending(true);
+      }
+    },
+    [decisionDisabled]
+  );
+
+  const renderFamilyCard = useCallback(
+    (family: typeof activeFamily, preview = false) => {
+      if (!family) {
+        return null;
+      }
+
+      const publicParent = getPrimaryParent(family);
+
+      return (
+        <FamilyDiscoveryHeroCard
+          key={family.id}
+          avatarUrl={publicParent?.avatarUrl}
+          distanceLabel={getFamilyDistanceLabel(draftProfile, family)}
+          familySummary={getFamilyChildrenSummary(family.children ?? [], family.expecting)}
+          fitChips={getFamilyFitChips(draftProfile, family)}
+          intro={family.summary}
+          parentName={publicParent?.firstName ?? 'Parent'}
+          photoUrl={family.photoUrls[0] ?? publicParent?.avatarUrl}
+          preview={preview}
+        />
+      );
+    },
+    [draftProfile]
+  );
+
+  const stackCards = useMemo<FamilySwipeStackItem[]>(
+    () =>
+      deckFamilies.slice(0, 3).map((family, index) => ({
+        id: family.id,
+        node: renderFamilyCard(family, index > 0),
+      })),
+    [deckFamilies, renderFamilyCard]
+  );
+
+  const familyEmptyState = useMemo<FamilySwipeStackEmptyState>(
+    () =>
+      visibleFamilies.length === 0
+        ? {
+            title: 'No families match these filters',
+            body: 'Try broadening the family stage, distance, or availability so the prototype can show more nearby parents again.',
+            actionLabel: 'Reset filters',
+            onAction: resetDiscoveryFilters,
+          }
+        : {
+            title: 'No more families to review right now',
+            body: 'Your current likes and matches have moved on to Connections. You can keep browsing later or open your existing conversations now.',
+            actionLabel: 'Open connections',
+            onAction: () => router.push('/(tabs)/connections'),
+          },
+    [resetDiscoveryFilters, visibleFamilies.length]
+  );
+
+  const renderEventsMode = () => (
+    <ScrollView
+      contentContainerStyle={styles.eventsScrollContent}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>Discover</Text>
-        <Text style={styles.subtitle}>
-          Browse nearby families or switch over to public events. Expecting parents stay in the same feed, while group events still stay shared with co-parents.
-        </Text>
-      </View>
-
       <Card>
-        <View style={styles.segmentRow}>
-          <SegmentButton active={mode === 'families'} label="Families" onPress={() => setMode('families')} />
-          <SegmentButton active={mode === 'events'} label="Public events" onPress={() => setMode('events')} />
-        </View>
-        <Chip label={ownershipChipLabel} />
+        <Chip label="Public events are shared with co-parents" />
 
         <View style={styles.filterHeader}>
           <View style={styles.filterHeaderText}>
-            <Text style={styles.filterTitle}>{mode === 'families' ? 'Family discovery' : 'Public event discovery'}</Text>
-            <Text style={styles.filterSubtitle}>{heroCopy}</Text>
+            <Text style={styles.filterTitle}>Public event discovery</Text>
+            <Text style={styles.filterSubtitle}>
+              {publicEventFilterCount === 0
+                ? `${visiblePublicEvents.length} public events are currently discoverable nearby.`
+                : `${visiblePublicEvents.length} public events match ${publicEventFilterCount} active filter${publicEventFilterCount === 1 ? '' : 's'}.`}
+            </Text>
           </View>
-          <Pressable onPress={() => setShowFilters((value) => !value)} style={styles.linkButton}>
-            <Text style={styles.linkText}>{showFilters ? 'Hide' : 'Edit'}</Text>
+          <Pressable onPress={() => setShowEventFilters((value) => !value)} style={styles.linkButton}>
+            <Text style={styles.linkText}>{showEventFilters ? 'Hide' : 'Edit'}</Text>
           </Pressable>
         </View>
 
         <View style={styles.filters}>
-          {mode === 'families' ? (
-            <>
-              <Chip label={formatRadiusLabel(discoveryFilters.radiusKm)} />
-              <Chip label={discoveryFilters.availability} />
-              {discoveryFilters.familyStage === 'expecting' ? <Chip label="Expecting" /> : null}
-              {showChildDiscoveryControls && similarAgeOnly ? <Chip label="Similar age" /> : null}
-              {showChildDiscoveryControls &&
-                discoveryFilters.selectedInterests.map((interest) => (
-                <Chip key={interest} label={interest} />
-                ))}
-            </>
-          ) : (
-            <>
-              <Chip label={formatRadiusLabel(publicEventFilters.radiusKm)} />
-              {publicEventFilters.audience !== ANY_PUBLIC_EVENT_AUDIENCE ? (
-                <Chip label={publicEventFilters.audience === 'expecting' ? 'Expecting parents' : 'Families with children'} />
-              ) : null}
-              {publicEventFilters.audience === 'children' && publicEventFilters.ageRange !== ANY_PUBLIC_EVENT_AGE ? (
-                <Chip label={publicEventFilters.ageRange} />
-              ) : null}
-              {publicEventFilters.selectedActivityTags.map((tag) => (
-                <Chip key={tag} label={tag} />
-              ))}
-            </>
-          )}
+          <Chip label={formatRadiusLabel(publicEventFilters.radiusKm)} />
+          {publicEventFilters.audience !== ANY_PUBLIC_EVENT_AUDIENCE ? (
+            <Chip label={publicEventFilters.audience === 'expecting' ? 'Expecting parents' : 'Families with children'} />
+          ) : null}
+          {publicEventFilters.audience === 'children' && publicEventFilters.ageRange !== ANY_PUBLIC_EVENT_AGE ? (
+            <Chip label={publicEventFilters.ageRange} />
+          ) : null}
+          {publicEventFilters.selectedActivityTags.map((tag) => (
+            <Chip key={tag} label={tag} />
+          ))}
         </View>
 
-        {mode === 'families' && pendingCount > 0 ? (
-          <Pressable onPress={() => router.push('/(tabs)/connections')} style={styles.connectionsLink}>
-            <Text style={styles.pendingHint}>
-              {pendingCount} family interest{pendingCount === 1 ? '' : 's'} waiting in Connections.
-            </Text>
-          </Pressable>
-        ) : null}
-
-        {showFilters ? (
+        {showEventFilters ? (
           <View style={styles.filterPanel}>
-            {mode === 'families' ? (
-              <>
-                <View style={styles.filterGroup}>
-                  <Text style={styles.groupLabel}>Distance</Text>
-                  <View style={styles.filters}>
-                    {distanceRadiusOptions.map((radiusKm) => (
-                      <SelectableChip
-                        key={radiusKm === null ? 'any-distance' : `${radiusKm}-km`}
-                        label={formatRadiusLabel(radiusKm)}
-                        selected={discoveryFilters.radiusKm === radiusKm}
-                        onPress={() => setDiscoveryRadius(radiusKm)}
-                      />
-                    ))}
-                  </View>
-                </View>
-                <View style={styles.filterGroup}>
-                  <Text style={styles.groupLabel}>Availability</Text>
-                  <View style={styles.filters}>
-                    {availabilityOptions.map((option) => (
-                      <SelectableChip
-                        key={option}
-                        label={option}
-                        selected={discoveryFilters.availability === option}
-                        onPress={() => setDiscoveryAvailability(option)}
-                      />
-                    ))}
-                  </View>
-                </View>
-                <View style={styles.filterGroup}>
-                  <Text style={styles.groupLabel}>Family stage</Text>
-                  <View style={styles.filters}>
+            <View style={styles.filterGroup}>
+              <Text style={styles.groupLabel}>Distance</Text>
+              <View style={styles.filters}>
+                {distanceRadiusOptions.map((radiusKm) => (
+                  <SelectableChip
+                    key={radiusKm === null ? 'any-event-distance' : `event-${radiusKm}-km`}
+                    label={formatRadiusLabel(radiusKm)}
+                    selected={publicEventFilters.radiusKm === radiusKm}
+                    onPress={() => setPublicEventRadius(radiusKm)}
+                  />
+                ))}
+              </View>
+            </View>
+            <View style={styles.filterGroup}>
+              <Text style={styles.groupLabel}>Audience</Text>
+              <View style={styles.filters}>
+                <SelectableChip
+                  label="All events"
+                  selected={publicEventFilters.audience === ANY_PUBLIC_EVENT_AUDIENCE}
+                  onPress={() => setPublicEventAudience(ANY_PUBLIC_EVENT_AUDIENCE)}
+                />
+                <SelectableChip
+                  label="Families with children"
+                  selected={publicEventFilters.audience === 'children'}
+                  onPress={() => setPublicEventAudience('children')}
+                />
+                <SelectableChip
+                  label="Expecting parents"
+                  selected={publicEventFilters.audience === 'expecting'}
+                  onPress={() => setPublicEventAudience('expecting')}
+                />
+              </View>
+            </View>
+            {publicEventFilters.audience === 'children' ? (
+              <View style={styles.filterGroup}>
+                <Text style={styles.groupLabel}>Age range</Text>
+                <View style={styles.filters}>
+                  <SelectableChip
+                    label={ANY_PUBLIC_EVENT_AGE}
+                    selected={publicEventFilters.ageRange === ANY_PUBLIC_EVENT_AGE}
+                    onPress={() => setPublicEventAgeRange(ANY_PUBLIC_EVENT_AGE)}
+                  />
+                  {groupAgeRangeOptions.map((ageRange) => (
                     <SelectableChip
-                      label="All families"
-                      selected={discoveryFilters.familyStage === 'all'}
-                      onPress={() => setDiscoveryFamilyStage('all')}
+                      key={ageRange}
+                      label={ageRange}
+                      selected={publicEventFilters.ageRange === ageRange}
+                      onPress={() => setPublicEventAgeRange(ageRange)}
                     />
-                    <SelectableChip
-                      label="Expecting"
-                      selected={discoveryFilters.familyStage === 'expecting'}
-                      onPress={() => setDiscoveryFamilyStage('expecting')}
-                    />
-                  </View>
+                  ))}
                 </View>
-                {showChildDiscoveryControls ? (
-                  <>
-                    <View style={styles.filterGroup}>
-                      <Text style={styles.groupLabel}>Age fit</Text>
-                      <View style={styles.filters}>
-                        <SelectableChip label="Similar age" selected={similarAgeOnly} onPress={toggleDiscoverySimilarAge} />
-                      </View>
-                    </View>
-                    <View style={styles.filterGroup}>
-                      <Text style={styles.groupLabel}>Shared interests</Text>
-                      <View style={styles.filters}>
-                        {childInterestOptions.map((interest) => (
-                          <SelectableChip
-                            key={interest}
-                            label={interest}
-                            selected={discoveryFilters.selectedInterests.includes(interest)}
-                            onPress={() => toggleDiscoveryInterest(interest)}
-                          />
-                        ))}
-                      </View>
-                    </View>
-                  </>
-                ) : null}
-                <Button label="Reset filters" variant="secondary" onPress={resetDiscoveryFilters} />
-              </>
-            ) : (
-              <>
-                <View style={styles.filterGroup}>
-                  <Text style={styles.groupLabel}>Distance</Text>
-                  <View style={styles.filters}>
-                    {distanceRadiusOptions.map((radiusKm) => (
-                      <SelectableChip
-                        key={radiusKm === null ? 'any-event-distance' : `event-${radiusKm}-km`}
-                        label={formatRadiusLabel(radiusKm)}
-                        selected={publicEventFilters.radiusKm === radiusKm}
-                        onPress={() => setPublicEventRadius(radiusKm)}
-                      />
-                    ))}
-                  </View>
-                </View>
-                <View style={styles.filterGroup}>
-                  <Text style={styles.groupLabel}>Audience</Text>
-                  <View style={styles.filters}>
-                    <SelectableChip
-                      label="All events"
-                      selected={publicEventFilters.audience === ANY_PUBLIC_EVENT_AUDIENCE}
-                      onPress={() => setPublicEventAudience(ANY_PUBLIC_EVENT_AUDIENCE)}
-                    />
-                    <SelectableChip
-                      label="Families with children"
-                      selected={publicEventFilters.audience === 'children'}
-                      onPress={() => setPublicEventAudience('children')}
-                    />
-                    <SelectableChip
-                      label="Expecting parents"
-                      selected={publicEventFilters.audience === 'expecting'}
-                      onPress={() => setPublicEventAudience('expecting')}
-                    />
-                  </View>
-                </View>
-                {publicEventFilters.audience === 'children' ? (
-                  <View style={styles.filterGroup}>
-                    <Text style={styles.groupLabel}>Age range</Text>
-                    <View style={styles.filters}>
-                      <SelectableChip
-                        label={ANY_PUBLIC_EVENT_AGE}
-                        selected={publicEventFilters.ageRange === ANY_PUBLIC_EVENT_AGE}
-                        onPress={() => setPublicEventAgeRange(ANY_PUBLIC_EVENT_AGE)}
-                      />
-                      {groupAgeRangeOptions.map((ageRange) => (
-                        <SelectableChip
-                          key={ageRange}
-                          label={ageRange}
-                          selected={publicEventFilters.ageRange === ageRange}
-                          onPress={() => setPublicEventAgeRange(ageRange)}
-                        />
-                      ))}
-                    </View>
-                  </View>
-                ) : null}
-                <View style={styles.filterGroup}>
-                  <Text style={styles.groupLabel}>Activities</Text>
-                  <View style={styles.filters}>
-                    {eventActivityOptions.map((tag) => (
-                      <SelectableChip
-                        key={tag}
-                        label={tag}
-                        selected={publicEventFilters.selectedActivityTags.includes(tag)}
-                        onPress={() => togglePublicEventActivity(tag)}
-                      />
-                    ))}
-                  </View>
-                </View>
-                <Button label="Reset filters" variant="secondary" onPress={resetPublicEventFilters} />
-              </>
-            )}
+              </View>
+            ) : null}
+            <View style={styles.filterGroup}>
+              <Text style={styles.groupLabel}>Activities</Text>
+              <View style={styles.filters}>
+                {eventActivityOptions.map((tag) => (
+                  <SelectableChip
+                    key={tag}
+                    label={tag}
+                    selected={publicEventFilters.selectedActivityTags.includes(tag)}
+                    onPress={() => togglePublicEventActivity(tag)}
+                  />
+                ))}
+              </View>
+            </View>
+            <Button label="Reset filters" variant="secondary" onPress={resetPublicEventFilters} />
           </View>
         ) : null}
       </Card>
 
-      {mode === 'families' ? (
-        visibleFamilies.length === 0 ? (
-          <EmptyState
-            title="No families match these filters"
-            body="Try broadening the family stage, distance, or availability so the prototype can show more nearby parents again."
-            actionLabel="Reset filters"
-            onAction={resetDiscoveryFilters}
-          />
-        ) : (
-          visibleFamilies.map((family) => {
-            const isMatched = matchedFamilyIds.includes(family.id);
-            const isLiked = likedFamilyIds.includes(family.id);
-            const publicParent = getPrimaryParent(family);
-
-            return (
-              <FamilyCard
-                key={family.id}
-                availability={family.availability}
-                avatarUrl={publicParent?.avatarUrl ?? ''}
-                children={family.children ?? []}
-                distanceLabel={getFamilyDistanceLabel(draftProfile, family)}
-                expecting={family.expecting}
-                familyVibe={family.familyVibe}
-                fitChips={getFamilyFitChips(draftProfile, family)}
-                languages={publicParent?.languages ?? []}
-                parentInterests={publicParent?.interests ?? []}
-                parentName={publicParent?.firstName ?? 'Parent'}
-                photoUrls={family.photoUrls}
-                summary={family.summary}
-                status={isMatched ? 'matched' : isLiked ? 'liked' : 'default'}
-                onPressPass={() => passFamily(family.id)}
-                onPressInterested={() => likeFamily(family.id)}
-                onPressOpen={() => router.push(`/family/${family.id}`)}
-              />
-            );
-          })
-        )
-      ) : visiblePublicEvents.length === 0 ? (
+      {visiblePublicEvents.length === 0 ? (
         <EmptyState
           title="No public events match these filters"
           body="Try broadening the distance or audience to find more open events nearby."
@@ -548,38 +648,269 @@ export default function DiscoverScreen() {
           );
         })
       )}
+    </ScrollView>
+  );
+
+  return (
+    <Screen contentStyle={styles.screenContent} edges={['top', 'left', 'right']}>
+      <View style={styles.root}>
+        {mode === 'families' ? (
+          <View style={styles.familyMode}>
+            <View style={styles.deckArea}>
+              <FamilySwipeStack
+                ref={stackRef}
+                disabled={decisionPending || showFamilyFilters || Boolean(detailFamilyId) || Boolean(matchOverlayFamilyId)}
+                emptyState={familyEmptyState}
+                items={stackCards}
+                onDecision={handleDecision}
+                onDecisionStart={handleDecisionStart}
+              />
+            </View>
+          </View>
+        ) : (
+          renderEventsMode()
+        )}
+
+        <View pointerEvents="box-none" style={styles.topOverlay}>
+          {mode === 'families' ? (
+            <OverlayIconButton
+              accessibilityLabel="Open family filters"
+              badgeCount={familyFilterCount}
+              disabled={filterButtonDisabled}
+              iconName="options-outline"
+              onPress={() => setShowFamilyFilters(true)}
+            />
+          ) : (
+            <View style={styles.overlaySideSpacer} />
+          )}
+
+          <View style={styles.modeSwitchShell}>
+            <View style={styles.segmentRow}>
+              <SegmentButton active={mode === 'families'} label="Families" onPress={() => setMode('families')} />
+              <SegmentButton active={mode === 'events'} label="Events" onPress={() => setMode('events')} />
+            </View>
+          </View>
+
+          {mode === 'families' ? (
+            <OverlayIconButton
+              accessibilityLabel={activeFamily ? `Open more information about ${getPrimaryParent(activeFamily)?.firstName ?? 'this family'}` : 'Open more information'}
+              disabled={moreButtonDisabled}
+              iconName="ellipsis-horizontal"
+              onPress={() => setDetailFamilyId(activeFamily?.id ?? null)}
+            />
+          ) : (
+            <View style={styles.overlaySideSpacer} />
+          )}
+        </View>
+
+        {mode === 'families' && deckFamilies.length > 0 ? (
+          <View pointerEvents="box-none" style={styles.bottomOverlay}>
+            <View style={styles.actionBar}>
+              <DecisionButton
+                disabled={decisionDisabled}
+                iconName="close-outline"
+                label="Not now"
+                onPress={() => triggerDecision('left')}
+              />
+              <DecisionButton
+                disabled={decisionDisabled}
+                iconName="heart"
+                label="Interested"
+                onPress={() => triggerDecision('right')}
+                tone="positive"
+              />
+            </View>
+          </View>
+        ) : null}
+      </View>
+
+      <DiscoveryBottomSheet
+        onClose={() => setShowFamilyFilters(false)}
+        title="Family filters"
+        visible={showFamilyFilters}
+      >
+        <ScrollView
+          contentContainerStyle={styles.sheetContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.filterGroup}>
+            <Text style={styles.groupLabel}>Distance</Text>
+            <View style={styles.filters}>
+              {distanceRadiusOptions.map((radiusKm) => (
+                <SelectableChip
+                  key={radiusKm === null ? 'any-distance-sheet' : `sheet-${radiusKm}-km`}
+                  label={formatRadiusLabel(radiusKm)}
+                  selected={discoveryFilters.radiusKm === radiusKm}
+                  onPress={() => setDiscoveryRadius(radiusKm)}
+                />
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.filterGroup}>
+            <Text style={styles.groupLabel}>Availability</Text>
+            <View style={styles.filters}>
+              {availabilityOptions.map((option) => (
+                <SelectableChip
+                  key={option}
+                  label={option}
+                  selected={discoveryFilters.availability === option}
+                  onPress={() => setDiscoveryAvailability(option)}
+                />
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.filterGroup}>
+            <Text style={styles.groupLabel}>Family stage</Text>
+            <View style={styles.filters}>
+              <SelectableChip
+                label="All families"
+                selected={discoveryFilters.familyStage === 'all'}
+                onPress={() => setDiscoveryFamilyStage('all')}
+              />
+              <SelectableChip
+                label="Expecting"
+                selected={discoveryFilters.familyStage === 'expecting'}
+                onPress={() => setDiscoveryFamilyStage('expecting')}
+              />
+            </View>
+          </View>
+
+          {showChildDiscoveryControls ? (
+            <>
+              <View style={styles.filterGroup}>
+                <Text style={styles.groupLabel}>Age fit</Text>
+                <View style={styles.filters}>
+                  <SelectableChip label="Similar age" selected={similarAgeOnly} onPress={toggleDiscoverySimilarAge} />
+                </View>
+              </View>
+              <View style={styles.filterGroup}>
+                <Text style={styles.groupLabel}>Shared interests</Text>
+                <View style={styles.filters}>
+                  {childInterestOptions.map((interest) => (
+                    <SelectableChip
+                      key={interest}
+                      label={interest}
+                      selected={discoveryFilters.selectedInterests.includes(interest)}
+                      onPress={() => toggleDiscoveryInterest(interest)}
+                    />
+                  ))}
+                </View>
+              </View>
+            </>
+          ) : null}
+
+          <Button label="Reset filters" variant="secondary" onPress={resetDiscoveryFilters} />
+        </ScrollView>
+      </DiscoveryBottomSheet>
+
+      <FamilyDetailSheet
+        draftProfile={draftProfile}
+        family={detailFamily}
+        onClose={() => setDetailFamilyId(null)}
+        onOpenProfile={() => {
+          const familyId = detailFamily?.id;
+          setDetailFamilyId(null);
+
+          if (familyId) {
+            router.push(`/family/${familyId}`);
+          }
+        }}
+        visible={Boolean(detailFamilyId && detailFamily)}
+      />
+
+      {matchFamily && matchParent ? (
+        <View pointerEvents="box-none" style={styles.matchOverlayRoot}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setMatchOverlayFamilyId(null)}
+            style={styles.matchBackdrop}
+          />
+          <View style={styles.matchCard}>
+            <View style={styles.matchHeader}>
+              <Avatar imageUrl={matchParent.avatarUrl} name={matchParent.firstName} size={56} />
+              <View style={styles.matchHeaderCopy}>
+                <Text style={styles.matchTitle}>Mutual match</Text>
+                <Text style={styles.matchName}>{matchParent.firstName} is interested too</Text>
+              </View>
+            </View>
+            <Text style={styles.matchBody}>
+              This connection now lives in Connections, where you can start chatting or keep browsing first.
+            </Text>
+            <View style={styles.matchActions}>
+              <View style={styles.flex}>
+                <Button label="Keep browsing" variant="secondary" onPress={() => setMatchOverlayFamilyId(null)} />
+              </View>
+              <View style={styles.flex}>
+                <Button
+                  label="Open connections"
+                  onPress={() => {
+                    setMatchOverlayFamilyId(null);
+                    router.push('/(tabs)/connections');
+                  }}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    gap: spacing.xs,
+  screenContent: {
+    flex: 1,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    gap: 0,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: colors.text,
+  root: {
+    flex: 1,
   },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: 15,
-    lineHeight: 22,
+  topOverlay: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.lg,
+    right: spacing.lg,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  overlaySideSpacer: {
+    width: 48,
+    height: 48,
+  },
+  modeSwitchShell: {
+    flex: 1,
+    alignItems: 'center',
   },
   segmentRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.xs,
+    width: '100%',
+    maxWidth: 250,
+    padding: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
   },
   segmentButton: {
     flex: 1,
     alignItems: 'center',
-    borderRadius: 18,
-    backgroundColor: colors.surfaceMuted,
-    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
   segmentButtonActive: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.primary,
   },
   segmentButtonText: {
     fontSize: 14,
@@ -587,7 +918,100 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   segmentButtonTextActive: {
-    color: colors.primary,
+    color: colors.surface,
+  },
+  overlayIconButton: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(18,24,20,0.42)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  overlayBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overlayBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.surface,
+  },
+  familyMode: {
+    flex: 1,
+  },
+  familyEmptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingTop: 96,
+    paddingHorizontal: spacing.xl,
+  },
+  deckArea: {
+    flex: 1,
+    minHeight: 0,
+  },
+  bottomOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: spacing.xl,
+    zIndex: 10,
+    paddingHorizontal: spacing.xl,
+  },
+  actionBar: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  decisionButton: {
+    flex: 1,
+    minHeight: 60,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  decisionButtonPositive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  decisionButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  decisionButtonTextPositive: {
+    color: colors.surface,
+  },
+  eventsScrollContent: {
+    paddingTop: 88,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxxl,
+    gap: spacing.lg,
   },
   filterHeader: {
     flexDirection: 'row',
@@ -606,8 +1030,8 @@ const styles = StyleSheet.create({
   },
   filterSubtitle: {
     fontSize: 14,
-    color: colors.textMuted,
     lineHeight: 20,
+    color: colors.textMuted,
   },
   linkButton: {
     paddingVertical: spacing.sm,
@@ -622,17 +1046,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-  pendingHint: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.primary,
-  },
-  connectionsLink: {
-    alignSelf: 'flex-start',
-  },
   filterPanel: {
     gap: spacing.lg,
-    marginTop: spacing.sm,
   },
   filterGroup: {
     gap: spacing.sm,
@@ -642,7 +1057,69 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textMuted,
   },
+  sheetContent: {
+    gap: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  matchOverlayRoot: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  matchBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(16, 20, 18, 0.46)',
+  },
+  matchCard: {
+    width: '100%',
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    padding: spacing.xl,
+    gap: spacing.lg,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  matchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  matchHeaderCopy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  matchTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  matchName: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  matchBody: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.textMuted,
+  },
+  matchActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  flex: {
+    flex: 1,
+  },
   pressed: {
     opacity: 0.86,
+  },
+  disabled: {
+    opacity: 0.55,
   },
 });

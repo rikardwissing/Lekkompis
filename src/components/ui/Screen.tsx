@@ -8,15 +8,16 @@ type ScreenProps = PropsWithChildren<{
   scroll?: boolean;
   header?: ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
+  edges?: Edge[];
   onScroll?: ((event: any) => void) | undefined;
 }>;
 
-export function Screen({ children, scroll = false, header, contentStyle, onScroll }: ScreenProps) {
-  const safeAreaEdges: Edge[] = header
+export function Screen({ children, scroll = false, header, contentStyle, edges, onScroll }: ScreenProps) {
+  const safeAreaEdges: Edge[] = edges ?? (header
     ? scroll
       ? ['top', 'left', 'right']
       : ['top', 'right', 'bottom', 'left']
-    : ['top', 'right', 'bottom', 'left'];
+    : ['top', 'right', 'bottom', 'left']);
   const content = (
     <View
       style={[

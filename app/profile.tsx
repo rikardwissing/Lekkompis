@@ -16,7 +16,7 @@ import {
 } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
-import { formatAgeLabelFromBirthDate, formatDateOnly } from '@/utils/birthdays';
+import { formatAgeLabelFromBirthDate, formatDateOnly, formatDueMonthLabel } from '@/utils/birthdays';
 
 export default function ProfileScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -162,6 +162,16 @@ export default function ProfileScreen() {
           </View>
         </Card>
       ))}
+
+      {draftProfile.expecting ? (
+        <Card>
+          <Text style={styles.sectionTitle}>Expecting</Text>
+          <Text style={styles.meta}>{formatDueMonthLabel(draftProfile.expecting.dueMonth)}</Text>
+          <Text style={styles.body}>
+            This family is currently open to expecting-friendly matches and events as well as the usual child-based flows.
+          </Text>
+        </Card>
+      ) : null}
 
       <Card>
         <Text style={styles.sectionTitle}>Family vibe</Text>

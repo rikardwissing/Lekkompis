@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getAllChildInterests } from '@/utils/birthdays';
+import { getAllChildInterests, isValidDateOnly, isValidMonthOnly } from '@/utils/birthdays';
 
 export type Availability = 'Weekends' | 'Weekday afternoons' | 'Flexible mornings';
 
@@ -8,6 +8,10 @@ export type ChildProfile = {
   name: string;
   birthDate: string;
   interests: string[];
+};
+
+export type ExpectingProfile = {
+  dueMonth: string;
 };
 
 export type ParentRole = 'primary' | 'coparent';
@@ -37,6 +41,7 @@ export type Family = {
   area: string;
   summary: string;
   children: ChildProfile[];
+  expecting: ExpectingProfile | null;
   shared: string[];
   familyVibe: string[];
   meetupNote: string;
@@ -57,6 +62,7 @@ export type Message = {
 
 export type GroupPlayDateVisibility = 'private' | 'public';
 export type GroupPlayDateMembership = 'hosting' | 'going' | 'invited' | 'requested' | 'none';
+export type GroupPlayDateAudience = 'children' | 'expecting';
 
 export type GroupPlayDate = {
   id: string;
@@ -65,7 +71,8 @@ export type GroupPlayDate = {
   locationName: string;
   dateLabel: string;
   timeLabel: string;
-  ageRange: string;
+  ageRange?: string;
+  audience: GroupPlayDateAudience;
   activityTags: string[];
   vibeTags: string[];
   note: string;
@@ -96,6 +103,7 @@ export type DraftProfile = {
   bio: string;
   familyVibe: string[];
   children: ChildProfile[];
+  expecting: ExpectingProfile | null;
 };
 
 export type DiscoveryFilters = {
@@ -103,11 +111,13 @@ export type DiscoveryFilters = {
   availability: Availability | 'Any';
   selectedInterests: string[];
   similarAgeOnly: boolean;
+  familyStage: 'all' | 'expecting';
 };
 
 export type PublicEventFilters = {
   area: string;
   ageRange: string;
+  audience: 'all' | GroupPlayDateAudience;
   selectedActivityTags: string[];
 };
 
@@ -117,7 +127,8 @@ export type CreateGroupPlayDateInput = {
   locationName: string;
   dateLabel: string;
   timeLabel: string;
-  ageRange: string;
+  ageRange?: string;
+  audience: GroupPlayDateAudience;
   activityTags: string[];
   vibeTags: string[];
   note: string;
@@ -176,10 +187,12 @@ type AppState = {
   toggleDraftChildInterest: (childId: string, value: string) => void;
   setDiscoveryArea: (area: string) => void;
   setDiscoveryAvailability: (availability: DiscoveryFilters['availability']) => void;
+  setDiscoveryFamilyStage: (familyStage: DiscoveryFilters['familyStage']) => void;
   toggleDiscoveryInterest: (value: string) => void;
   toggleDiscoverySimilarAge: () => void;
   resetDiscoveryFilters: () => void;
   setPublicEventArea: (area: string) => void;
+  setPublicEventAudience: (audience: PublicEventFilters['audience']) => void;
   setPublicEventAgeRange: (ageRange: string) => void;
   togglePublicEventActivity: (value: string) => void;
   resetPublicEventFilters: () => void;
@@ -213,6 +226,7 @@ const DEMO_COPARENT: ParentAccount = {
 };
 
 export const ANY_PUBLIC_EVENT_AGE = 'Any age';
+export const ANY_PUBLIC_EVENT_AUDIENCE = 'all';
 
 const atMinute = (minuteOffset: number) => FIXTURE_START + minuteOffset * 60_000;
 
@@ -224,6 +238,15 @@ const slugify = (value: string) =>
     .replace(/^-+|-+$/g, '') || 'group';
 
 const buildInterestDefaults = (children: ChildProfile[] = []) => getAllChildInterests(children).slice(0, 2);
+
+const hasChildrenInternal = (children: ChildProfile[] = []) =>
+  children.some((child) => child.name.trim().length > 0 && isValidDateOnly(child.birthDate));
+const hasExpectingProfileInternal = (expecting?: ExpectingProfile | null) =>
+  Boolean(expecting?.dueMonth && isValidMonthOnly(expecting.dueMonth));
+const canParticipateInAudienceInternal = (
+  value: { children?: ChildProfile[]; expecting?: ExpectingProfile | null },
+  audience: GroupPlayDateAudience
+) => (audience === 'children' ? hasChildrenInternal(value.children) : hasExpectingProfileInternal(value.expecting));
 
 const createChild = (overrides: Partial<ChildProfile> = {}): ChildProfile => ({
   id: overrides.id ?? `child-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -315,7 +338,7 @@ const defaultDraftProfile: DraftProfile = {
     'https://picsum.photos/seed/anna-park/600/600',
   ],
   area: 'Vasastan',
-  bio: 'Mamma to Leo and Mila. Looking for simple weekend meetups nearby, and parents we would genuinely enjoy seeing again.',
+  bio: 'Mamma to Leo and Mila, and expecting another baby in September. Looking for simple weekend meetups nearby and parent company we would genuinely enjoy seeing again.',
   familyVibe: ['Weekend meetups', 'Public place first', 'Outdoor-friendly'],
   children: [
     createChild({
@@ -331,6 +354,9 @@ const defaultDraftProfile: DraftProfile = {
       interests: ['Animals', 'Books', 'Playgrounds'],
     }),
   ],
+  expecting: {
+    dueMonth: '2026-09',
+  },
 };
 
 const defaultFamilies: Family[] = [
@@ -364,6 +390,7 @@ const defaultFamilies: Family[] = [
         interests: ['Playgrounds', 'Drawing', 'Crafts'],
       }),
     ],
+    expecting: null,
     shared: ['Same area', 'Playgrounds', 'Weekend meetups'],
     familyVibe: ['Warm', 'Outdoor-friendly', 'Easygoing'],
     meetupNote: 'Usually starts with a public playground meetup and coffee nearby.',
@@ -398,6 +425,7 @@ const defaultFamilies: Family[] = [
         interests: ['Animals', 'Books', 'Playgrounds'],
       }),
     ],
+    expecting: null,
     shared: ['Animals', 'Public-place first'],
     familyVibe: ['Calm', 'Public-place first', 'Morning plans'],
     meetupNote: 'Prefers quiet first meetings and a short walk after.',
@@ -423,7 +451,7 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/johan-3/600/600',
     ],
     area: 'Vasastan',
-    summary: 'Parent to Elis and Alba. Outdoor family, often free on Sundays, and hoping to click with both kids and parents.',
+    summary: 'Parent to Elis and Alba, with another baby due in October. Outdoor family hoping to click with both kids and parents.',
     children: [
       createChild({
         id: 'johan-elis',
@@ -438,6 +466,9 @@ const defaultFamilies: Family[] = [
         interests: ['Animals', 'Playgrounds', 'Books'],
       }),
     ],
+    expecting: {
+      dueMonth: '2026-10',
+    },
     shared: ['Nearby', 'Outdoor play'],
     familyVibe: ['Energetic', 'Weekend plans', 'Playground regular'],
     meetupNote: 'Happy to meet at Vasaparken or another public playground.',
@@ -472,10 +503,42 @@ const defaultFamilies: Family[] = [
         interests: ['Drawing', 'Books', 'Crafts'],
       }),
     ],
+    expecting: null,
     shared: ['Drawing', 'Baking'],
     familyVibe: ['New in area', 'Warm', 'Weekday afternoons'],
     meetupNote: 'Often free after preschool and likes simple neighborhood meetups.',
     availability: ['Weekday afternoons'],
+  },
+  {
+    id: 'mira',
+    primaryParentId: 'mira-primary',
+    parents: [
+      createParent({
+        id: 'mira-primary',
+        firstName: 'Mira',
+        avatarUrl: 'https://randomuser.me/api/portraits/women/34.jpg',
+        birthDate: '1992-09-08',
+        interests: ['Coffee walks', 'Baking', 'Books'],
+        languages: ['Swedish', 'English'],
+        role: 'primary',
+        status: 'active',
+      }),
+    ],
+    photoUrls: [
+      'https://picsum.photos/seed/mira-1/600/600',
+      'https://picsum.photos/seed/mira-2/600/600',
+      'https://picsum.photos/seed/mira-3/600/600',
+    ],
+    area: 'Vasastan',
+    summary: 'Expecting a first baby in late summer and hoping to meet nearby parents before the newborn blur starts.',
+    children: [],
+    expecting: {
+      dueMonth: '2026-08',
+    },
+    shared: ['Same area', 'Warm'],
+    familyVibe: ['Public place first', 'Calm pace', 'Weekend meetups'],
+    meetupNote: 'Usually prefers a short coffee or walk meetup somewhere easy to reach.',
+    availability: ['Weekends', 'Flexible mornings'],
   },
 ];
 
@@ -502,6 +565,29 @@ const initialMessages: Record<string, Message[]> = {
       body: 'Lovely - public place first works great for us too. Sharing the playground corner we usually start at.',
       photoUrls: ['https://picsum.photos/seed/vasaparken-chat/720/480'],
       createdAt: atMinute(13),
+    },
+  ],
+  'mira-match': [
+    {
+      id: 'mira-1',
+      senderFamilyId: 'mira',
+      senderParentId: 'mira-primary',
+      body: 'Hej! Happy to connect. A simple coffee or short walk next week could be lovely.',
+      createdAt: atMinute(34),
+    },
+    {
+      id: 'mira-2',
+      senderFamilyId: CURRENT_FAMILY_ID,
+      senderParentId: CURRENT_PRIMARY_PARENT_ID,
+      body: 'That sounds really nice. Late morning is usually easiest for us.',
+      createdAt: atMinute(38),
+    },
+    {
+      id: 'mira-3',
+      senderFamilyId: 'mira',
+      senderParentId: 'mira-primary',
+      body: 'Perfect. Public place first suits us too, and we are very happy to keep it short and easy.',
+      createdAt: atMinute(42),
     },
   ],
 };
@@ -541,6 +627,15 @@ const initialGroupMessages: Record<string, Message[]> = {
       createdAt: atMinute(8),
     },
   ],
+  'due-date-coffee-circle': [
+    {
+      id: 'g5',
+      senderFamilyId: 'mira',
+      senderParentId: 'mira-primary',
+      body: 'You can peek at the chat before deciding. I booked a quiet corner so everyone can come and go easily.',
+      createdAt: atMinute(14),
+    },
+  ],
 };
 
 const initialGroupPlayDates: GroupPlayDate[] = [
@@ -552,6 +647,7 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     dateLabel: 'Sat 29 Mar',
     timeLabel: '10:00-11:30',
     ageRange: '3-5 years',
+    audience: 'children',
     activityTags: ['Playgrounds', 'Scooters'],
     vibeTags: ['Public place first', 'Outdoor-friendly'],
     note: 'Sara is hosting a low-key first meetup with coffee after if the kids click.',
@@ -573,6 +669,7 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     dateLabel: 'Sun 30 Mar',
     timeLabel: '09:30-11:00',
     ageRange: '4-6 years',
+    audience: 'children',
     activityTags: ['Animals', 'Picnic'],
     vibeTags: ['Weekend meetups', 'Bring snacks'],
     note: 'You are hosting this one for nearby matches who enjoy easy Sunday mornings.',
@@ -594,6 +691,7 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     dateLabel: 'Sun 6 Apr',
     timeLabel: '10:30-12:00',
     ageRange: '3-5 years',
+    audience: 'children',
     activityTags: ['Books', 'Picnic'],
     vibeTags: ['Calm pace', 'Public place first'],
     note: 'A relaxed public meetup with blankets, picture books, and a simple snack stop after if the kids are still happy.',
@@ -615,6 +713,7 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     dateLabel: 'Sat 12 Apr',
     timeLabel: '14:00-15:30',
     ageRange: '4-6 years',
+    audience: 'children',
     activityTags: ['Crafts', 'Drawing'],
     vibeTags: ['Short first meetup', 'Public place first'],
     note: 'Already a full public event built around a short craft session and a quick park stop after.',
@@ -628,6 +727,48 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     pendingRequestFamilyIds: [],
     createdAt: atMinute(32),
   },
+  {
+    id: 'due-date-coffee-circle',
+    title: 'Due date coffee circle',
+    area: 'Vasastan',
+    locationName: 'Norrtull cafe corner',
+    dateLabel: 'Thu 3 Apr',
+    timeLabel: '10:30-11:45',
+    audience: 'expecting',
+    activityTags: ['Coffee', 'Walk'],
+    vibeTags: ['Public place first', 'Calm pace'],
+    note: 'Mira is keeping this one easy: coffee first, then a short walk if everyone still has energy.',
+    capacity: 4,
+    hostFamilyId: 'mira',
+    visibility: 'private',
+    membership: 'invited',
+    attendeeFamilyIds: ['mira'],
+    invitedFamilyIds: [CURRENT_FAMILY_ID],
+    includedParentIds: [CURRENT_PRIMARY_PARENT_ID],
+    pendingRequestFamilyIds: [],
+    createdAt: atMinute(12),
+  },
+  {
+    id: 'expecting-brunch-sunday',
+    title: 'Sunday expecting parents brunch',
+    area: 'Kungsholmen',
+    locationName: 'Ralambshov cafe terrace',
+    dateLabel: 'Sun 13 Apr',
+    timeLabel: '11:00-12:30',
+    audience: 'expecting',
+    activityTags: ['Brunch', 'Tea'],
+    vibeTags: ['Short first meetup', 'Calm pace'],
+    note: 'A relaxed expecting-parents meetup with plenty of sit-down time and no pressure to stay the whole time.',
+    capacity: 5,
+    hostFamilyId: 'mira',
+    visibility: 'public',
+    membership: 'none',
+    attendeeFamilyIds: ['mira'],
+    invitedFamilyIds: [],
+    includedParentIds: [],
+    pendingRequestFamilyIds: [],
+    createdAt: atMinute(36),
+  },
 ];
 
 const defaultDiscoveryFilters = (draftProfile: DraftProfile): DiscoveryFilters => ({
@@ -635,15 +776,17 @@ const defaultDiscoveryFilters = (draftProfile: DraftProfile): DiscoveryFilters =
   availability: 'Any',
   selectedInterests: buildInterestDefaults(draftProfile.children),
   similarAgeOnly: false,
+  familyStage: 'all',
 });
 
 const defaultPublicEventFilters = (draftProfile: DraftProfile): PublicEventFilters => ({
   area: draftProfile.area,
   ageRange: ANY_PUBLIC_EVENT_AGE,
+  audience: ANY_PUBLIC_EVENT_AUDIENCE,
   selectedActivityTags: [],
 });
 
-const defaultMatchedFamilyIds = ['sara'];
+const defaultMatchedFamilyIds = ['sara', 'mira'];
 const defaultLikedFamilyIdsByParent: ParentFamilyIdsByParent = {
   [CURRENT_PRIMARY_PARENT_ID]: [],
 };
@@ -656,6 +799,7 @@ const defaultMatchedFamilyIdsByParent: ParentFamilyIdsByParent = {
 const initialDirectConversationLastSeenAtByParent: ConversationLastSeenByParent = {
   [CURRENT_PRIMARY_PARENT_ID]: {
     'sara-match': atMinute(10),
+    'mira-match': atMinute(38),
   },
 };
 const initialGroupConversationLastSeenAtByParent: Record<string, Record<string, number>> = {
@@ -672,6 +816,16 @@ export const getPrimaryParent = <T extends ParentContainer>(value: T) => getPrim
 export const getActiveParent = (draftProfile: DraftProfile) => getActiveParentInternal(draftProfile);
 
 export const isPrimaryActiveParent = (draftProfile: DraftProfile) => isPrimaryParentSession(draftProfile);
+
+export const hasBornChildren = (value: { children?: ChildProfile[] }) => hasChildrenInternal(value.children);
+
+export const isExpectingFamily = (value: { expecting?: ExpectingProfile | null }) =>
+  hasExpectingProfileInternal(value.expecting);
+
+export const canParticipateInAudience = (
+  value: { children?: ChildProfile[]; expecting?: ExpectingProfile | null },
+  audience: GroupPlayDateAudience
+) => canParticipateInAudienceInternal(value, audience);
 
 export const getActiveLikedFamilyIds = (
   draftProfile: DraftProfile,
@@ -935,7 +1089,7 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => {
       const currentChildren = state.draftProfile.children ?? [];
 
-      if (currentChildren.length <= 1) {
+      if (currentChildren.length <= 1 && !hasExpectingProfileInternal(state.draftProfile.expecting)) {
         return state;
       }
 
@@ -1010,6 +1164,13 @@ export const useAppStore = create<AppState>((set) => ({
         availability,
       },
     })),
+  setDiscoveryFamilyStage: (familyStage) =>
+    set((state) => ({
+      discoveryFilters: {
+        ...state.discoveryFilters,
+        familyStage,
+      },
+    })),
   toggleDiscoveryInterest: (value) =>
     set((state) => ({
       discoveryFilters: {
@@ -1033,6 +1194,15 @@ export const useAppStore = create<AppState>((set) => ({
       publicEventFilters: {
         ...state.publicEventFilters,
         area,
+      },
+    })),
+  setPublicEventAudience: (audience) =>
+    set((state) => ({
+      publicEventFilters: {
+        ...state.publicEventFilters,
+        audience,
+        ageRange: audience === 'children' ? state.publicEventFilters.ageRange : ANY_PUBLIC_EVENT_AGE,
+        selectedActivityTags: [],
       },
     })),
   setPublicEventAgeRange: (ageRange) =>
@@ -1086,7 +1256,7 @@ export const useAppStore = create<AppState>((set) => ({
           getFamilyIdsForParentInternal(state.matchedFamilyIdsByParent, parent.id).includes(id)
       );
       const shouldMatch =
-        alreadyMatchedByAnotherLinkedParent || (id === 'sara' && !activeMatchedFamilyIds.includes(id));
+        alreadyMatchedByAnotherLinkedParent || (['sara', 'mira'].includes(id) && !activeMatchedFamilyIds.includes(id));
 
       return {
         likedFamilyIdsByParent: {
@@ -1299,7 +1469,11 @@ export const useAppStore = create<AppState>((set) => ({
 
       return {
         groupPlayDates: state.groupPlayDates.map((groupPlayDate) => {
-          if (groupPlayDate.id !== id || groupPlayDate.visibility !== 'private' || groupPlayDate.membership !== 'invited') {
+          if (
+            groupPlayDate.id !== id ||
+            groupPlayDate.visibility !== 'private' ||
+            groupPlayDate.membership !== 'invited'
+          ) {
             return groupPlayDate;
           }
 
@@ -1310,6 +1484,10 @@ export const useAppStore = create<AppState>((set) => ({
               invitedFamilyIds: groupPlayDate.invitedFamilyIds.filter((familyId) => familyId !== state.currentFamilyId),
               includedParentIds: [],
             };
+          }
+
+          if (!canParticipateInAudienceInternal(state.draftProfile, groupPlayDate.audience)) {
+            return groupPlayDate;
           }
 
           return {
@@ -1341,7 +1519,8 @@ export const useAppStore = create<AppState>((set) => ({
             groupPlayDate.visibility !== 'public' ||
             groupPlayDate.membership !== 'none' ||
             groupPlayDate.hostFamilyId === state.currentFamilyId ||
-            isFull
+            isFull ||
+            !canParticipateInAudienceInternal(state.draftProfile, groupPlayDate.audience)
           ) {
             return groupPlayDate;
           }
@@ -1432,6 +1611,7 @@ export const useAppStore = create<AppState>((set) => ({
           locationName: input.locationName,
           dateLabel: input.dateLabel,
           timeLabel: input.timeLabel,
+          audience: input.audience,
           ageRange: input.ageRange,
           activityTags: input.activityTags,
           vibeTags: input.vibeTags,

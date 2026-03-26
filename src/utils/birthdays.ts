@@ -43,6 +43,23 @@ const parseParts = (value: string) => {
   return { year, month, day };
 };
 
+const parseMonthParts = (value: string) => {
+  const match = /^(\d{4})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  const date = new Date(Date.UTC(year, month - 1, 1));
+
+  if (Number.isNaN(date.getTime()) || date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1) {
+    return null;
+  }
+
+  return { year, month };
+};
+
 const toUtcDate = (year: number, month: number, day: number) =>
   new Date(Date.UTC(year, month - 1, day));
 
@@ -84,14 +101,23 @@ const getMonthDifference = (left: string, right: string) => {
 };
 
 export const isValidDateOnly = (value: string) => Boolean(parseParts(value));
+export const isValidMonthOnly = (value: string) => Boolean(parseMonthParts(value));
 
 export const dateOnlyToDate = (value: string) => {
   const parts = parseParts(value);
   return parts ? toUtcDate(parts.year, parts.month, parts.day) : null;
 };
 
+export const monthOnlyToDate = (value: string) => {
+  const parts = parseMonthParts(value);
+  return parts ? toUtcDate(parts.year, parts.month, 1) : null;
+};
+
 export const toDateOnlyString = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+export const toMonthOnlyString = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
 export const formatDateOnly = (value: string, includeYear = true) => {
   const parts = parseParts(value);
@@ -104,6 +130,26 @@ export const formatDateOnly = (value: string, includeYear = true) => {
     month: 'short',
     ...(includeYear ? { year: 'numeric' } : {}),
   }).format(toUtcDate(parts.year, parts.month, parts.day));
+};
+
+export const formatMonthOnly = (value: string) => {
+  const parts = parseMonthParts(value);
+  if (!parts) {
+    return 'Not set';
+  }
+
+  return new Intl.DateTimeFormat('en-GB', {
+    month: 'short',
+    year: 'numeric',
+  }).format(toUtcDate(parts.year, parts.month, 1));
+};
+
+export const formatDueMonthLabel = (value: string) => {
+  if (!isValidMonthOnly(value)) {
+    return 'Due month not set';
+  }
+
+  return `Due ${formatMonthOnly(value)}`;
 };
 
 export const formatAgeLabelFromBirthDate = (birthDate: string, today = new Date()) => {
@@ -164,6 +210,17 @@ export const getClosestChildAgeMatch = (
 export const getAgeGapSortValue = (currentChildren: ChildLike[] = [], familyChildren: ChildLike[] = []) => {
   const bestMatch = getClosestChildAgeMatch(currentChildren, familyChildren);
   return bestMatch ? bestMatch.monthsApart : Number.POSITIVE_INFINITY;
+};
+
+export const getMonthOnlyDifference = (left: string, right: string) => {
+  const leftParts = parseMonthParts(left);
+  const rightParts = parseMonthParts(right);
+
+  if (!leftParts || !rightParts) {
+    return null;
+  }
+
+  return Math.abs((leftParts.year - rightParts.year) * 12 + (leftParts.month - rightParts.month));
 };
 
 export const getNextBirthdayInfo = (birthDate: string, today = new Date()): NextBirthdayInfo | null => {

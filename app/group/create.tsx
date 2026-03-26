@@ -9,15 +9,18 @@ import { SelectableChip } from '@/components/ui/SelectableChip';
 import { TextField } from '@/components/ui/TextField';
 import {
   areaOptions,
+  expectingActivityOptions,
   groupActivityOptions,
   groupAgeRangeOptions,
   groupVibeOptions,
 } from '@/constants/demo-profiles';
 import {
+  canParticipateInAudience,
   getActiveMatchedFamilyIds,
   getActiveParent,
   getLinkedParentMatchedFamilyIds,
   getPrimaryParent,
+  type GroupPlayDateAudience,
   useAppStore,
   type GroupPlayDateVisibility,
 } from '@/store/app-store';
@@ -32,6 +35,7 @@ type GroupFormState = {
   dateLabel: string;
   timeLabel: string;
   ageRange: string;
+  audience: GroupPlayDateAudience;
   activityTags: string[];
   vibeTags: string[];
   note: string;
@@ -43,13 +47,14 @@ type GroupFormState = {
 const toggle = (values: string[], value: string) =>
   values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value];
 
-const createInitialForm = (defaultArea: string): GroupFormState => ({
+const createInitialForm = (defaultArea: string, audience: GroupPlayDateAudience): GroupFormState => ({
   title: '',
   locationName: '',
   area: defaultArea,
   dateLabel: '',
   timeLabel: '',
   ageRange: '',
+  audience,
   activityTags: [],
   vibeTags: [],
   note: '',
@@ -64,8 +69,12 @@ export default function CreateGroupScreen() {
   const families = useAppStore((state) => state.families);
   const matchedFamilyIdsByParent = useAppStore((state) => state.matchedFamilyIdsByParent);
   const createGroupPlayDate = useAppStore((state) => state.createGroupPlayDate);
-  const [form, setForm] = useState<GroupFormState>(() => createInitialForm(draftProfile.area));
   const activeParent = getActiveParent(draftProfile);
+  const canHostChildrenEvents = canParticipateInAudience(draftProfile, 'children');
+  const canHostExpectingEvents = canParticipateInAudience(draftProfile, 'expecting');
+  const defaultAudience = canHostChildrenEvents ? 'children' : 'expecting';
+  const [form, setForm] = useState<GroupFormState>(() => createInitialForm(draftProfile.area, defaultAudience));
+  const canHostSelectedAudience = canParticipateInAudience(draftProfile, form.audience);
   const matchedFamilyIds = [
     ...new Set([
       ...getActiveMatchedFamilyIds(draftProfile, matchedFamilyIdsByParent),
@@ -79,9 +88,10 @@ export default function CreateGroupScreen() {
   });
 
   const matchedFamilies = useMemo(
-    () => getMatchedFamilies(families, matchedFamilyIds),
-    [families, matchedFamilyIds]
+    () => getMatchedFamilies(families, matchedFamilyIds).filter((family) => canParticipateInAudience(family, form.audience)),
+    [families, form.audience, matchedFamilyIds]
   );
+  const activityOptions = form.audience === 'children' ? groupActivityOptions : expectingActivityOptions;
 
   const capacityValue = Number.parseInt(form.capacity, 10);
   const hasRequiredFields =
@@ -90,12 +100,13 @@ export default function CreateGroupScreen() {
     form.area.trim().length > 0 &&
     form.dateLabel.trim().length > 0 &&
     form.timeLabel.trim().length > 0 &&
-    form.ageRange.trim().length > 0 &&
+    (form.audience === 'expecting' || form.ageRange.trim().length > 0) &&
     form.activityTags.length > 0 &&
     form.vibeTags.length > 0 &&
     Number.isFinite(capacityValue) &&
     capacityValue >= 1;
   const canSubmit =
+    canHostSelectedAudience &&
     hasRequiredFields &&
     capacityValue >= (form.visibility === 'private' ? form.invitedFamilyIds.length + 1 : 1) &&
     (form.visibility === 'public' || form.invitedFamilyIds.length > 0);
@@ -111,7 +122,8 @@ export default function CreateGroupScreen() {
       locationName: form.locationName.trim(),
       dateLabel: form.dateLabel.trim(),
       timeLabel: form.timeLabel.trim(),
-      ageRange: form.ageRange,
+      ageRange: form.audience === 'children' ? form.ageRange : undefined,
+      audience: form.audience,
       activityTags: form.activityTags,
       vibeTags: form.vibeTags,
       note: form.note.trim(),
@@ -146,6 +158,46 @@ export default function CreateGroupScreen() {
       </View>
 
       <Card>
+        <Text style={styles.sectionTitle}>Audience</Text>
+        <View style={styles.filters}>
+          <SelectableChip
+            label="Families with children"
+            selected={form.audience === 'children'}
+            onPress={() =>
+              setForm((current) => ({
+                ...current,
+                audience: 'children',
+                activityTags: [],
+                invitedFamilyIds: [],
+              }))
+            }
+          />
+          <SelectableChip
+            label="Expecting parents"
+            selected={form.audience === 'expecting'}
+            onPress={() =>
+              setForm((current) => ({
+                ...current,
+                audience: 'expecting',
+                ageRange: '',
+                activityTags: [],
+                invitedFamilyIds: [],
+              }))
+            }
+          />
+        </View>
+        <Text style={styles.helperText}>
+          {form.audience === 'children'
+            ? canHostChildrenEvents
+              ? 'Child-focused events keep the age-range flow you already have.'
+              : 'Add at least one born child with a valid birthday before creating a child-focused event.'
+            : canHostExpectingEvents
+              ? 'Expecting-friendly events stay parent-focused and skip child age ranges.'
+              : 'Add a valid due month in your profile before creating an expecting-friendly event.'}
+        </Text>
+      </Card>
+
+      <Card>
         <Text style={styles.sectionTitle}>Visibility</Text>
         <View style={styles.filters}>
           <SelectableChip
@@ -162,7 +214,7 @@ export default function CreateGroupScreen() {
         <Text style={styles.helperText}>
           {form.visibility === 'private'
             ? 'Private events are invite-only and live inside your connection network.'
-            : 'Public events show up in Discover and parents request to join until you approve them.'}
+            : 'Public events show up in Discover for parents who fit this audience and request to join until you approve them.'}
         </Text>
       </Card>
 
@@ -205,23 +257,25 @@ export default function CreateGroupScreen() {
             />
           </View>
         </View>
-        <View style={styles.section}>
-          <Text style={styles.label}>Age range</Text>
-          <View style={styles.filters}>
-            {groupAgeRangeOptions.map((ageRange) => (
-              <SelectableChip
-                key={ageRange}
-                label={ageRange}
-                selected={form.ageRange === ageRange}
-                onPress={() => setForm((current) => ({ ...current, ageRange }))}
-              />
-            ))}
+        {form.audience === 'children' ? (
+          <View style={styles.section}>
+            <Text style={styles.label}>Age range</Text>
+            <View style={styles.filters}>
+              {groupAgeRangeOptions.map((ageRange) => (
+                <SelectableChip
+                  key={ageRange}
+                  label={ageRange}
+                  selected={form.ageRange === ageRange}
+                  onPress={() => setForm((current) => ({ ...current, ageRange }))}
+                />
+              ))}
+            </View>
           </View>
-        </View>
+        ) : null}
         <View style={styles.section}>
           <Text style={styles.label}>Activities</Text>
           <View style={styles.filters}>
-            {groupActivityOptions.map((tag) => (
+            {activityOptions.map((tag) => (
               <SelectableChip
                 key={tag}
                 label={tag}
@@ -249,7 +303,7 @@ export default function CreateGroupScreen() {
           multiline
           placeholder={
             form.visibility === 'private'
-              ? 'What should invited families know about the pace, tone, or first-meetup setup?'
+              ? 'What should invited parents know about the pace, tone, or first-meetup setup?'
               : 'What should parents know before requesting to join this public event?'
           }
           value={form.note}
@@ -291,7 +345,9 @@ export default function CreateGroupScreen() {
               <Text style={styles.helperText}>Capacity must cover you plus everyone invited.</Text>
             </>
           ) : (
-            <Text style={styles.helperText}>You do not have any mutual matches yet, so private events are not available until you connect with another family.</Text>
+            <Text style={styles.helperText}>
+              You do not have any mutual matches who fit this audience yet, so private events are not available until you connect with another family here.
+            </Text>
           )}
         </Card>
       ) : null}

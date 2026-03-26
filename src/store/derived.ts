@@ -1,12 +1,18 @@
 import {
   ANY_PUBLIC_EVENT_AGE,
+  ANY_PUBLIC_EVENT_AUDIENCE,
+  canParticipateInAudience,
   type ChildProfile,
   type ConversationThread,
   type DraftProfile,
+  type ExpectingProfile,
   type Family,
   getActiveMatchedFamilyIds,
   getActiveParent,
   getDirectConversationLastSeenAtForActiveParent,
+  type GroupPlayDateAudience,
+  hasBornChildren,
+  isExpectingFamily,
   getPrimaryParent,
   type GroupPlayDate,
   type Message,
@@ -14,11 +20,13 @@ import {
 } from '@/store/app-store';
 import {
   formatChildBirthdayLabel,
+  formatDueMonthLabel,
   formatParentBirthdayLabel,
   formatChildrenSummary,
   getAgeGapSortValue,
   getAllChildInterests,
   getClosestChildAgeMatch,
+  getMonthOnlyDifference,
   getNextBirthdayInfo,
 } from '@/utils/birthdays';
 
@@ -53,6 +61,10 @@ export type BirthdayEvent = {
 const unique = (values: string[]) => [...new Set(values)];
 
 const getFamilyPublicParent = (family: Family) => getPrimaryParent(family);
+const getSharedValues = (left: string[] = [], right: string[] = []) => {
+  const rightSet = new Set(right);
+  return left.filter((value) => rightSet.has(value));
+};
 
 export const buildConversationPreview = (
   message?: Message,
@@ -94,6 +106,49 @@ export const getSharedChildInterests = (draftChildren: ChildProfile[] = [], fami
   return getAllChildInterests(familyChildren).filter((interest) => draftInterests.has(interest));
 };
 
+export const getSharedParentInterests = (draftProfile: DraftProfile, family: Family) =>
+  getSharedValues(getPrimaryParent(draftProfile)?.interests ?? [], getFamilyPublicParent(family)?.interests ?? []);
+
+export const getSharedLanguages = (draftProfile: DraftProfile, family: Family) =>
+  getSharedValues(getPrimaryParent(draftProfile)?.languages ?? [], getFamilyPublicParent(family)?.languages ?? []);
+
+export const getSharedFamilyVibes = (draftProfile: DraftProfile, family: Family) =>
+  getSharedValues(draftProfile.familyVibe ?? [], family.familyVibe ?? []);
+
+export const getSharedParentInterestCount = (draftProfile: DraftProfile, family: Family) =>
+  getSharedParentInterests(draftProfile, family).length;
+
+export const getSharedLanguageCount = (draftProfile: DraftProfile, family: Family) =>
+  getSharedLanguages(draftProfile, family).length;
+
+export const getSharedFamilyVibeCount = (draftProfile: DraftProfile, family: Family) =>
+  getSharedFamilyVibes(draftProfile, family).length;
+
+export const getDueMonthGapSortValue = (
+  currentExpecting: ExpectingProfile | null | undefined,
+  familyExpecting: ExpectingProfile | null | undefined
+) => {
+  if (!currentExpecting?.dueMonth || !familyExpecting?.dueMonth) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const difference = getMonthOnlyDifference(currentExpecting.dueMonth, familyExpecting.dueMonth);
+  return difference ?? Number.POSITIVE_INFINITY;
+};
+
+export const getDueMonthFitLabel = (
+  currentExpecting: ExpectingProfile | null | undefined,
+  familyExpecting: ExpectingProfile | null | undefined
+) => {
+  const difference = getMonthOnlyDifference(currentExpecting?.dueMonth ?? '', familyExpecting?.dueMonth ?? '');
+
+  if (difference === null || difference > 3) {
+    return null;
+  }
+
+  return 'Similar due month';
+};
+
 export const getFamilyAgeFitLabel = (draftChildren: ChildProfile[] = [], familyChildren: ChildProfile[] = []) => {
   const match = getClosestChildAgeMatch(draftChildren, familyChildren);
 
@@ -112,11 +167,41 @@ export const getFamilySortValue = (draftChildren: ChildProfile[] = [], familyChi
 
 export const getFamilyFitChips = (draftProfile: DraftProfile, family: Family) => {
   const ageFit = getFamilyAgeFitLabel(draftProfile.children ?? [], family.children ?? []);
-  return unique([...(family.shared ?? []), ...(ageFit ? [ageFit] : [])]);
+  const dueMonthFit = getDueMonthFitLabel(draftProfile.expecting, family.expecting);
+  const parentFitChips = [
+    getSharedParentInterestCount(draftProfile, family) > 0 ? 'Shared parent interests' : null,
+    getSharedLanguageCount(draftProfile, family) > 0 ? 'Shared language' : null,
+    getSharedFamilyVibeCount(draftProfile, family) > 0 ? 'Shared family vibe' : null,
+  ].filter((value): value is string => Boolean(value));
+
+  return unique([...(family.shared ?? []), ...(ageFit ? [ageFit] : []), ...(dueMonthFit ? [dueMonthFit] : []), ...parentFitChips]);
 };
 
-export const getFamilyChildrenSummary = (children: ChildProfile[], today = new Date()) =>
-  formatChildrenSummary(children, today);
+export const getFamilyChildrenSummary = (
+  children: ChildProfile[],
+  expecting?: ExpectingProfile | null,
+  today = new Date()
+) => {
+  const childSummary = formatChildrenSummary(children, today);
+  const dueMonthLabel = expecting?.dueMonth ? formatDueMonthLabel(expecting.dueMonth) : null;
+
+  if (childSummary && dueMonthLabel) {
+    return `${childSummary} · ${dueMonthLabel}`;
+  }
+
+  return childSummary || dueMonthLabel || 'No family details yet';
+};
+
+export const isExpectingOnlyFamily = (value: { children?: ChildProfile[]; expecting?: ExpectingProfile | null }) =>
+  !hasBornChildren(value) && isExpectingFamily(value);
+
+export const getGroupAudienceLabel = ({
+  ageRange,
+  audience,
+}: {
+  ageRange?: string;
+  audience: GroupPlayDateAudience;
+}) => (audience === 'expecting' ? 'Expecting parents' : ageRange ?? 'Families with children');
 
 export const getUpcomingBirthdayEventsForFamily = (family: Family, today = new Date(), windowDays = 30) => {
   const familyParent = getFamilyPublicParent(family);
@@ -240,10 +325,12 @@ export const getUpcomingGroups = (groupPlayDates: GroupPlayDate[], draftProfile:
 
 export const getDiscoverablePublicEvents = ({
   currentFamilyId,
+  draftProfile,
   filters,
   groupPlayDates,
 }: {
   currentFamilyId: string;
+  draftProfile: DraftProfile;
   filters: PublicEventFilters;
   groupPlayDates: GroupPlayDate[];
 }) =>
@@ -251,8 +338,16 @@ export const getDiscoverablePublicEvents = ({
     if (groupPlayDate.visibility !== 'public') return false;
     if (groupPlayDate.hostFamilyId === currentFamilyId) return false;
     if (groupPlayDate.membership !== 'none' && groupPlayDate.membership !== 'requested') return false;
+    if (!canParticipateInAudience(draftProfile, groupPlayDate.audience)) return false;
     if (filters.area !== 'All nearby' && groupPlayDate.area !== filters.area) return false;
-    if (filters.ageRange !== ANY_PUBLIC_EVENT_AGE && groupPlayDate.ageRange !== filters.ageRange) return false;
+    if (filters.audience !== ANY_PUBLIC_EVENT_AUDIENCE && groupPlayDate.audience !== filters.audience) return false;
+    if (
+      filters.audience === 'children' &&
+      filters.ageRange !== ANY_PUBLIC_EVENT_AGE &&
+      groupPlayDate.ageRange !== filters.ageRange
+    ) {
+      return false;
+    }
     if (
       filters.selectedActivityTags.length > 0 &&
       !filters.selectedActivityTags.some((tag) => groupPlayDate.activityTags.includes(tag))

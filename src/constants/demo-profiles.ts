@@ -53,6 +53,15 @@ export const groupActivityOptions = [
   'Drawing',
 ];
 
+export const expectingActivityOptions = [
+  'Coffee',
+  'Walk',
+  'Brunch',
+  'Baby prep',
+  'Prenatal yoga',
+  'Tea',
+];
+
 export const groupVibeOptions = [
   'Public place first',
   'Outdoor-friendly',
@@ -63,7 +72,7 @@ export const groupVibeOptions = [
 ];
 
 export const suggestedReplies = [
-  'Hej! Saturday morning works for us.',
-  'Happy to meet at a playground first.',
-  'Would Vasaparken around 10 work?',
+  'Hej! Happy to connect. A simple coffee or walk next week could work for us.',
+  'Public place first sounds lovely on our side too.',
+  'Would sometime around 10 work for you?',
 ];

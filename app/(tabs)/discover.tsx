@@ -14,20 +14,29 @@ import {
   areaOptions,
   availabilityOptions,
   childInterestOptions,
+  expectingActivityOptions,
   groupActivityOptions,
   groupAgeRangeOptions,
 } from '@/constants/demo-profiles';
 import {
   ANY_PUBLIC_EVENT_AGE,
+  ANY_PUBLIC_EVENT_AUDIENCE,
   getActiveLikedFamilyIds,
   getActiveMatchedFamilyIds,
   getActivePassedFamilyIds,
+  hasBornChildren,
+  isExpectingFamily,
   getPrimaryParent,
   useAppStore,
 } from '@/store/app-store';
 import {
+  getDueMonthGapSortValue,
   getDiscoverablePublicEvents,
   getFamilyFitChips,
+  getGroupAudienceLabel,
+  getSharedFamilyVibeCount,
+  getSharedLanguageCount,
+  getSharedParentInterestCount,
   getFamilySortValue,
   isGroupFull,
   isSimilarAgeFamily,
@@ -71,10 +80,12 @@ export default function DiscoverScreen() {
   const passFamily = useAppStore((state) => state.passFamily);
   const setDiscoveryArea = useAppStore((state) => state.setDiscoveryArea);
   const setDiscoveryAvailability = useAppStore((state) => state.setDiscoveryAvailability);
+  const setDiscoveryFamilyStage = useAppStore((state) => state.setDiscoveryFamilyStage);
   const toggleDiscoveryInterest = useAppStore((state) => state.toggleDiscoveryInterest);
   const toggleDiscoverySimilarAge = useAppStore((state) => state.toggleDiscoverySimilarAge);
   const resetDiscoveryFilters = useAppStore((state) => state.resetDiscoveryFilters);
   const setPublicEventArea = useAppStore((state) => state.setPublicEventArea);
+  const setPublicEventAudience = useAppStore((state) => state.setPublicEventAudience);
   const setPublicEventAgeRange = useAppStore((state) => state.setPublicEventAgeRange);
   const togglePublicEventActivity = useAppStore((state) => state.togglePublicEventActivity);
   const resetPublicEventFilters = useAppStore((state) => state.resetPublicEventFilters);
@@ -86,6 +97,14 @@ export default function DiscoverScreen() {
 
   const draftChildren = draftProfile.children ?? [];
   const similarAgeOnly = discoveryFilters.similarAgeOnly ?? false;
+  const hasDraftChildren = hasBornChildren(draftProfile);
+  const showChildDiscoveryControls = hasDraftChildren && discoveryFilters.familyStage === 'all';
+  const eventActivityOptions =
+    publicEventFilters.audience === 'expecting'
+      ? expectingActivityOptions
+      : publicEventFilters.audience === 'children'
+        ? groupActivityOptions
+        : [...groupActivityOptions, ...expectingActivityOptions.filter((option) => !groupActivityOptions.includes(option))];
   const familyById = useMemo(
     () =>
       Object.fromEntries([
@@ -107,49 +126,91 @@ export default function DiscoverScreen() {
           if (passedFamilyIds.includes(family.id)) return false;
           if (discoveryFilters.area !== 'All nearby' && family.area !== discoveryFilters.area) return false;
           if (discoveryFilters.availability !== 'Any' && !family.availability.includes(discoveryFilters.availability)) return false;
+          if (discoveryFilters.familyStage === 'expecting' && !isExpectingFamily(family)) return false;
           if (
+            showChildDiscoveryControls &&
             discoveryFilters.selectedInterests.length > 0 &&
             !discoveryFilters.selectedInterests.some((interest) => getAllChildInterests(familyChildren).includes(interest))
           ) {
             return false;
           }
-          if (similarAgeOnly && !isSimilarAgeFamily(draftChildren, familyChildren)) {
+          if (showChildDiscoveryControls && similarAgeOnly && !isSimilarAgeFamily(draftChildren, familyChildren)) {
             return false;
           }
           return true;
         })
         .sort((left, right) => {
-          const leftSortValue = getFamilySortValue(draftChildren, left.family.children ?? []);
-          const rightSortValue = getFamilySortValue(draftChildren, right.family.children ?? []);
+          const leftAgeSortValue = getFamilySortValue(draftChildren, left.family.children ?? []);
+          const rightAgeSortValue = getFamilySortValue(draftChildren, right.family.children ?? []);
+          const leftHasAgeFit = Number.isFinite(leftAgeSortValue);
+          const rightHasAgeFit = Number.isFinite(rightAgeSortValue);
 
-          if (leftSortValue === rightSortValue) {
-            return left.index - right.index;
+          if (leftHasAgeFit !== rightHasAgeFit) {
+            return leftHasAgeFit ? -1 : 1;
           }
 
-          return leftSortValue < rightSortValue ? -1 : 1;
+          if (leftHasAgeFit && rightHasAgeFit && leftAgeSortValue !== rightAgeSortValue) {
+            return leftAgeSortValue - rightAgeSortValue;
+          }
+
+          const leftDueMonthSortValue = getDueMonthGapSortValue(draftProfile.expecting, left.family.expecting);
+          const rightDueMonthSortValue = getDueMonthGapSortValue(draftProfile.expecting, right.family.expecting);
+          const leftHasDueMonthFit = Number.isFinite(leftDueMonthSortValue);
+          const rightHasDueMonthFit = Number.isFinite(rightDueMonthSortValue);
+
+          if (leftHasDueMonthFit !== rightHasDueMonthFit) {
+            return leftHasDueMonthFit ? -1 : 1;
+          }
+
+          if (leftHasDueMonthFit && rightHasDueMonthFit && leftDueMonthSortValue !== rightDueMonthSortValue) {
+            return leftDueMonthSortValue - rightDueMonthSortValue;
+          }
+
+          const sharedParentInterestDelta =
+            getSharedParentInterestCount(draftProfile, right.family) - getSharedParentInterestCount(draftProfile, left.family);
+          if (sharedParentInterestDelta !== 0) {
+            return sharedParentInterestDelta;
+          }
+
+          const sharedLanguageDelta =
+            getSharedLanguageCount(draftProfile, right.family) - getSharedLanguageCount(draftProfile, left.family);
+          if (sharedLanguageDelta !== 0) {
+            return sharedLanguageDelta;
+          }
+
+          const sharedVibeDelta =
+            getSharedFamilyVibeCount(draftProfile, right.family) - getSharedFamilyVibeCount(draftProfile, left.family);
+          if (sharedVibeDelta !== 0) {
+            return sharedVibeDelta;
+          }
+
+          return left.index - right.index;
         })
         .map(({ family }) => family),
-    [discoveryFilters, draftChildren, families, passedFamilyIds, similarAgeOnly]
+    [discoveryFilters, draftChildren, draftProfile, families, passedFamilyIds, showChildDiscoveryControls, similarAgeOnly]
   );
 
   const visiblePublicEvents = useMemo(
     () =>
       getDiscoverablePublicEvents({
         currentFamilyId,
+        draftProfile,
         filters: publicEventFilters,
         groupPlayDates,
       }),
-    [currentFamilyId, groupPlayDates, publicEventFilters]
+    [currentFamilyId, draftProfile, groupPlayDates, publicEventFilters]
   );
 
   const familyFilterCount =
     (discoveryFilters.area === 'All nearby' ? 0 : 1) +
     (discoveryFilters.availability === 'Any' ? 0 : 1) +
-    discoveryFilters.selectedInterests.length +
-    (similarAgeOnly ? 1 : 0);
+    (discoveryFilters.familyStage === 'expecting' ? 1 : 0) +
+    (showChildDiscoveryControls ? discoveryFilters.selectedInterests.length : 0) +
+    (showChildDiscoveryControls && similarAgeOnly ? 1 : 0);
   const publicEventFilterCount =
     (publicEventFilters.area === 'All nearby' ? 0 : 1) +
-    (publicEventFilters.ageRange === ANY_PUBLIC_EVENT_AGE ? 0 : 1) +
+    (publicEventFilters.audience === ANY_PUBLIC_EVENT_AUDIENCE ? 0 : 1) +
+    (publicEventFilters.audience === 'children' && publicEventFilters.ageRange !== ANY_PUBLIC_EVENT_AGE ? 1 : 0) +
     publicEventFilters.selectedActivityTags.length;
   const pendingCount = likedFamilyIds.filter((familyId) => !matchedFamilyIds.includes(familyId)).length;
   const ownershipChipLabel =
@@ -180,7 +241,7 @@ export default function DiscoverScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Discover</Text>
         <Text style={styles.subtitle}>
-          Browse nearby families or switch over to public events. Family connections stay parent-specific, while group events are shared with co-parents.
+          Browse nearby families or switch over to public events. Expecting parents stay in the same feed, while group events still stay shared with co-parents.
         </Text>
       </View>
 
@@ -206,15 +267,22 @@ export default function DiscoverScreen() {
             <>
               <Chip label={discoveryFilters.area} />
               <Chip label={discoveryFilters.availability} />
-              {similarAgeOnly ? <Chip label="Similar age" /> : null}
-              {discoveryFilters.selectedInterests.map((interest) => (
+              {discoveryFilters.familyStage === 'expecting' ? <Chip label="Expecting" /> : null}
+              {showChildDiscoveryControls && similarAgeOnly ? <Chip label="Similar age" /> : null}
+              {showChildDiscoveryControls &&
+                discoveryFilters.selectedInterests.map((interest) => (
                 <Chip key={interest} label={interest} />
-              ))}
+                ))}
             </>
           ) : (
             <>
               <Chip label={publicEventFilters.area} />
-              {publicEventFilters.ageRange !== ANY_PUBLIC_EVENT_AGE ? <Chip label={publicEventFilters.ageRange} /> : null}
+              {publicEventFilters.audience !== ANY_PUBLIC_EVENT_AUDIENCE ? (
+                <Chip label={publicEventFilters.audience === 'expecting' ? 'Expecting parents' : 'Families with children'} />
+              ) : null}
+              {publicEventFilters.audience === 'children' && publicEventFilters.ageRange !== ANY_PUBLIC_EVENT_AGE ? (
+                <Chip label={publicEventFilters.ageRange} />
+              ) : null}
               {publicEventFilters.selectedActivityTags.map((tag) => (
                 <Chip key={tag} label={tag} />
               ))}
@@ -261,24 +329,43 @@ export default function DiscoverScreen() {
                   </View>
                 </View>
                 <View style={styles.filterGroup}>
-                  <Text style={styles.groupLabel}>Age fit</Text>
+                  <Text style={styles.groupLabel}>Family stage</Text>
                   <View style={styles.filters}>
-                    <SelectableChip label="Similar age" selected={similarAgeOnly} onPress={toggleDiscoverySimilarAge} />
+                    <SelectableChip
+                      label="All families"
+                      selected={discoveryFilters.familyStage === 'all'}
+                      onPress={() => setDiscoveryFamilyStage('all')}
+                    />
+                    <SelectableChip
+                      label="Expecting"
+                      selected={discoveryFilters.familyStage === 'expecting'}
+                      onPress={() => setDiscoveryFamilyStage('expecting')}
+                    />
                   </View>
                 </View>
-                <View style={styles.filterGroup}>
-                  <Text style={styles.groupLabel}>Shared interests</Text>
-                  <View style={styles.filters}>
-                    {childInterestOptions.map((interest) => (
-                      <SelectableChip
-                        key={interest}
-                        label={interest}
-                        selected={discoveryFilters.selectedInterests.includes(interest)}
-                        onPress={() => toggleDiscoveryInterest(interest)}
-                      />
-                    ))}
-                  </View>
-                </View>
+                {showChildDiscoveryControls ? (
+                  <>
+                    <View style={styles.filterGroup}>
+                      <Text style={styles.groupLabel}>Age fit</Text>
+                      <View style={styles.filters}>
+                        <SelectableChip label="Similar age" selected={similarAgeOnly} onPress={toggleDiscoverySimilarAge} />
+                      </View>
+                    </View>
+                    <View style={styles.filterGroup}>
+                      <Text style={styles.groupLabel}>Shared interests</Text>
+                      <View style={styles.filters}>
+                        {childInterestOptions.map((interest) => (
+                          <SelectableChip
+                            key={interest}
+                            label={interest}
+                            selected={discoveryFilters.selectedInterests.includes(interest)}
+                            onPress={() => toggleDiscoveryInterest(interest)}
+                          />
+                        ))}
+                      </View>
+                    </View>
+                  </>
+                ) : null}
                 <Button label="Reset filters" variant="secondary" onPress={resetDiscoveryFilters} />
               </>
             ) : (
@@ -297,27 +384,49 @@ export default function DiscoverScreen() {
                   </View>
                 </View>
                 <View style={styles.filterGroup}>
-                  <Text style={styles.groupLabel}>Age range</Text>
+                  <Text style={styles.groupLabel}>Audience</Text>
                   <View style={styles.filters}>
                     <SelectableChip
-                      label={ANY_PUBLIC_EVENT_AGE}
-                      selected={publicEventFilters.ageRange === ANY_PUBLIC_EVENT_AGE}
-                      onPress={() => setPublicEventAgeRange(ANY_PUBLIC_EVENT_AGE)}
+                      label="All events"
+                      selected={publicEventFilters.audience === ANY_PUBLIC_EVENT_AUDIENCE}
+                      onPress={() => setPublicEventAudience(ANY_PUBLIC_EVENT_AUDIENCE)}
                     />
-                    {groupAgeRangeOptions.map((ageRange) => (
-                      <SelectableChip
-                        key={ageRange}
-                        label={ageRange}
-                        selected={publicEventFilters.ageRange === ageRange}
-                        onPress={() => setPublicEventAgeRange(ageRange)}
-                      />
-                    ))}
+                    <SelectableChip
+                      label="Families with children"
+                      selected={publicEventFilters.audience === 'children'}
+                      onPress={() => setPublicEventAudience('children')}
+                    />
+                    <SelectableChip
+                      label="Expecting parents"
+                      selected={publicEventFilters.audience === 'expecting'}
+                      onPress={() => setPublicEventAudience('expecting')}
+                    />
                   </View>
                 </View>
+                {publicEventFilters.audience === 'children' ? (
+                  <View style={styles.filterGroup}>
+                    <Text style={styles.groupLabel}>Age range</Text>
+                    <View style={styles.filters}>
+                      <SelectableChip
+                        label={ANY_PUBLIC_EVENT_AGE}
+                        selected={publicEventFilters.ageRange === ANY_PUBLIC_EVENT_AGE}
+                        onPress={() => setPublicEventAgeRange(ANY_PUBLIC_EVENT_AGE)}
+                      />
+                      {groupAgeRangeOptions.map((ageRange) => (
+                        <SelectableChip
+                          key={ageRange}
+                          label={ageRange}
+                          selected={publicEventFilters.ageRange === ageRange}
+                          onPress={() => setPublicEventAgeRange(ageRange)}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
                 <View style={styles.filterGroup}>
                   <Text style={styles.groupLabel}>Activities</Text>
                   <View style={styles.filters}>
-                    {groupActivityOptions.map((tag) => (
+                    {eventActivityOptions.map((tag) => (
                       <SelectableChip
                         key={tag}
                         label={tag}
@@ -338,7 +447,7 @@ export default function DiscoverScreen() {
         visibleFamilies.length === 0 ? (
           <EmptyState
             title="No families match these filters"
-            body="Try broadening area or availability so the prototype can show more nearby families again."
+            body="Try broadening the family stage, area, or availability so the prototype can show more nearby parents again."
             actionLabel="Reset filters"
             onAction={resetDiscoveryFilters}
           />
@@ -355,6 +464,7 @@ export default function DiscoverScreen() {
                 availability={family.availability}
                 avatarUrl={publicParent?.avatarUrl ?? ''}
                 children={family.children ?? []}
+                expecting={family.expecting}
                 familyVibe={family.familyVibe}
                 fitChips={getFamilyFitChips(draftProfile, family)}
                 languages={publicParent?.languages ?? []}
@@ -373,7 +483,7 @@ export default function DiscoverScreen() {
       ) : visiblePublicEvents.length === 0 ? (
         <EmptyState
           title="No public events match these filters"
-          body="Try broadening the area or age range to find more open events nearby."
+          body="Try broadening the area or audience to find more open events nearby."
           actionLabel="Reset filters"
           onAction={resetPublicEventFilters}
         />
@@ -391,7 +501,7 @@ export default function DiscoverScreen() {
           return (
             <PublicEventCard
               key={groupPlayDate.id}
-              ageRange={groupPlayDate.ageRange}
+              audienceLabel={getGroupAudienceLabel(groupPlayDate)}
               area={groupPlayDate.area}
               attendeeCount={groupPlayDate.attendeeFamilyIds.length}
               capacity={groupPlayDate.capacity}

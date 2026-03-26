@@ -7,6 +7,7 @@ import { SelectableChip } from '@/components/ui/SelectableChip';
 import { TextField } from '@/components/ui/TextField';
 import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { BirthdayField } from '@/components/ui/BirthdayField';
+import { MonthField } from '@/components/ui/MonthField';
 import { areaOptions, familyVibeOptions, languageOptions, parentInterestOptions } from '@/constants/demo-profiles';
 import { getPrimaryParent, useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
@@ -25,7 +26,7 @@ export default function ParentProfileScreen() {
     <Screen scroll>
       <View style={styles.header}>
         <Text style={styles.title}>Parent profile</Text>
-        <Text style={styles.subtitle}>Show the adult side too — mock photos, interests, and languages help this feel like family matching for parents as well.</Text>
+        <Text style={styles.subtitle}>Show the adult side too. Photos, interests, languages, and expecting details all help this feel like parent matching, not just child matching.</Text>
       </View>
       <Card>
         <TextField
@@ -98,6 +99,29 @@ export default function ParentProfileScreen() {
               <SelectableChip key={item} label={item} selected={draftProfile.familyVibe.includes(item)} onPress={() => toggleFamilyVibe(item)} />
             ))}
           </View>
+        </View>
+        <View style={styles.section}>
+          <Text style={styles.label}>Expecting</Text>
+          <View style={styles.row}>
+            <SelectableChip
+              label="Expecting a child"
+              selected={Boolean(draftProfile.expecting)}
+              onPress={() =>
+                updateDraftProfile({
+                  expecting: draftProfile.expecting ? null : { dueMonth: '' },
+                })
+              }
+            />
+          </View>
+          <Text style={styles.helper}>Optional for the prototype, but it unlocks matching and events for expecting parents too.</Text>
+          {draftProfile.expecting ? (
+            <MonthField
+              label="Due month"
+              placeholder="Only month and year are shown"
+              value={draftProfile.expecting.dueMonth}
+              onChange={(dueMonth) => updateDraftProfile({ expecting: { dueMonth } })}
+            />
+          ) : null}
         </View>
       </Card>
       <Button label="Continue to child profile" onPress={() => router.push('/(setup)/child-profile')} />

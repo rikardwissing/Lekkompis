@@ -8,14 +8,15 @@ import { SubscreenHeader } from '@/components/navigation/SubscreenHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { getActiveParent, getPrimaryParent, useAppStore } from '@/store/app-store';
+import { getGroupAudienceLabel } from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 
 const suggestedGroupReplies = [
-  'We are in and should be on time.',
-  'Happy to keep this one simple and outdoors.',
-  'We can bring fruit and bubbles.',
+  'We are in and should be there on time.',
+  'Happy to keep this one simple and low-key.',
+  'Tea and a short catch-up sounds lovely to us.',
 ];
 
 const groupPhotoOptions = [
@@ -24,7 +25,7 @@ const groupPhotoOptions = [
 ];
 
 export function generateStaticParams() {
-  return [{ groupId: 'animal-zoo-sunday' }, { groupId: 'vasaparken-saturday' }];
+  return [{ groupId: 'animal-zoo-sunday' }, { groupId: 'vasaparken-saturday' }, { groupId: 'due-date-coffee-circle' }];
 }
 
 export default function GroupChatScreen() {
@@ -242,6 +243,7 @@ export default function GroupChatScreen() {
               <Text style={styles.contextMeta}>
                 {groupPlayDate.dateLabel} · {groupPlayDate.timeLabel}
               </Text>
+              <Text style={styles.contextMeta}>{getGroupAudienceLabel(groupPlayDate)}</Text>
               <Text style={styles.contextMeta}>Hosted by {host?.parentName ?? 'a nearby parent'}</Text>
               {activeParent ? <Text style={styles.contextMeta}>Coordinating as {activeParent.firstName}</Text> : null}
             </View>

@@ -20,7 +20,7 @@ import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 
 export function generateStaticParams() {
-  return [{ matchId: 'sara-match' }];
+  return [{ matchId: 'sara-match' }, { matchId: 'mira-match' }];
 }
 
 const photoReplyOptions = [
@@ -187,7 +187,7 @@ export default function ChatScreen() {
         onChangeDraft={setDraft}
         onSend={submit}
         onToggleTools={() => setToolsOpen((current) => !current)}
-        placeholder="Message"
+        placeholder="Message the parent"
         toolSections={toolSections}
         toolsOpen={toolsOpen}
       />

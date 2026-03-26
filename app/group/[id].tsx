@@ -9,7 +9,7 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { getActiveParent, getPrimaryParent, useAppStore } from '@/store/app-store';
-import { canActiveParentViewGroup, isGroupFull } from '@/store/derived';
+import { canActiveParentViewGroup, getGroupAudienceLabel, isGroupFull } from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
@@ -19,6 +19,8 @@ export function generateStaticParams() {
     { id: 'vasaparken-saturday' },
     { id: 'story-garden-sunday' },
     { id: 'museum-crafts-saturday' },
+    { id: 'due-date-coffee-circle' },
+    { id: 'expecting-brunch-sunday' },
   ];
 }
 
@@ -158,7 +160,7 @@ export default function GroupDetailScreen() {
           <View style={styles.identityText}>
             <Text style={styles.sectionTitle}>Hosted by {host?.parentName ?? 'a nearby parent'}</Text>
             <Text style={styles.body}>
-              {groupPlayDate.area} · {groupPlayDate.ageRange}
+              {groupPlayDate.area} · {getGroupAudienceLabel(groupPlayDate)}
             </Text>
             {activeParent ? <Text style={styles.body}>Coordinating as {activeParent.firstName}</Text> : null}
           </View>
@@ -166,6 +168,7 @@ export default function GroupDetailScreen() {
         <View style={styles.filters}>
           <Chip label={statusLabel} />
           <Chip label={groupPlayDate.visibility === 'public' ? 'Public' : 'Invite-only'} />
+          <Chip label={getGroupAudienceLabel(groupPlayDate)} />
           <Chip label={`${groupPlayDate.attendeeFamilyIds.length}/${groupPlayDate.capacity} families`} />
           {groupPlayDate.activityTags.map((tag) => (
             <Chip key={tag} label={tag} />

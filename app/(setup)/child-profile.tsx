@@ -11,7 +11,7 @@ import { type ChildProfile, useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
-import { isValidDateOnly } from '@/utils/birthdays';
+import { isValidDateOnly, isValidMonthOnly } from '@/utils/birthdays';
 
 function ChildEditorCard({
   child,
@@ -64,18 +64,18 @@ export default function ChildProfileScreen() {
   const updateDraftChild = useAppStore((state) => state.updateDraftChild);
   const toggleDraftChildInterest = useAppStore((state) => state.toggleDraftChildInterest);
   const children = draftProfile.children ?? [];
+  const hasValidBornChild = children.some(
+    (child) => child.name.trim().length > 0 && child.birthDate.trim().length > 0 && isValidDateOnly(child.birthDate)
+  );
+  const hasValidDueMonth = Boolean(draftProfile.expecting?.dueMonth && isValidMonthOnly(draftProfile.expecting.dueMonth));
 
-  const canContinue =
-    children.length > 0 &&
-    children.every(
-      (child) => child.name.trim().length > 0 && child.birthDate.trim().length > 0 && isValidDateOnly(child.birthDate)
-    );
+  const canContinue = hasValidBornChild || hasValidDueMonth;
 
   return (
     <Screen scroll>
       <View style={styles.header}>
         <Text style={styles.title}>Child profiles</Text>
-        <Text style={styles.subtitle}>Add each child with a real birthday so discovery can find families with the closest age fit automatically.</Text>
+        <Text style={styles.subtitle}>Add born children with real birthdays so discovery can find close age fits, or skip this for now if you are expecting and only want parent matching first.</Text>
       </View>
 
       <Card>
@@ -83,7 +83,7 @@ export default function ChildProfileScreen() {
           {children.map((child) => (
             <ChildEditorCard
               key={child.id}
-              canRemove={children.length > 1}
+              canRemove={children.length > 1 || Boolean(draftProfile.expecting)}
               child={child}
               onChange={(patch) => updateDraftChild(child.id, patch)}
               onRemove={() => removeDraftChild(child.id)}
@@ -99,7 +99,7 @@ export default function ChildProfileScreen() {
 
       {!canContinue ? (
         <Text style={styles.helper}>
-          Add at least one child with a name and birthday before going to Discover. Interests can stay flexible.
+          Add at least one child with a name and birthday, or add an expecting due month on the parent step before going to Discover.
         </Text>
       ) : null}
 

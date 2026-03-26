@@ -16,13 +16,13 @@ import {
   getPrimaryParent,
   useAppStore,
 } from '@/store/app-store';
-import { getFamilyFitChips, getSharedChildInterests } from '@/store/derived';
+import { getFamilyFitChips, getSharedChildInterests, getSharedLanguages, getSharedParentInterests } from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
-import { formatAgeLabelFromBirthDate, formatChildBirthdayLabel, formatParentBirthdayLabel } from '@/utils/birthdays';
+import { formatAgeLabelFromBirthDate, formatChildBirthdayLabel, formatDueMonthLabel, formatParentBirthdayLabel } from '@/utils/birthdays';
 
 export function generateStaticParams() {
-  return ['sara', 'fatima', 'johan', 'elin'].map((id) => ({ id }));
+  return ['sara', 'fatima', 'johan', 'elin', 'mira'].map((id) => ({ id }));
 }
 
 export default function FamilyDetailScreen() {
@@ -34,7 +34,6 @@ export default function FamilyDetailScreen() {
   const matchedFamilyIdsByParent = useAppStore((state) => state.matchedFamilyIdsByParent);
   const draftProfile = useAppStore((state) => state.draftProfile);
   const family = families.find((item) => item.id === id);
-  const currentFamilyPrimaryParent = getPrimaryParent(draftProfile);
   const familyPrimaryParent = family ? getPrimaryParent(family) : null;
   const likedFamilyIds = getActiveLikedFamilyIds(draftProfile, likedFamilyIdsByParent);
   const matchedFamilyIds = getActiveMatchedFamilyIds(draftProfile, matchedFamilyIdsByParent);
@@ -61,10 +60,13 @@ export default function FamilyDetailScreen() {
   const isMatched = matchedFamilyIds.includes(family.id);
   const isLiked = likedFamilyIds.includes(family.id);
   const familyChildren = family.children ?? [];
-  const sharedInterests = getSharedChildInterests(draftProfile.children ?? [], familyChildren);
-  const sharedLanguages = (familyPrimaryParent?.languages ?? []).filter((language) =>
-    currentFamilyPrimaryParent?.languages.includes(language)
-  );
+  const sharedInterests = [
+    ...new Set([
+      ...getSharedChildInterests(draftProfile.children ?? [], familyChildren),
+      ...getSharedParentInterests(draftProfile, family),
+    ]),
+  ];
+  const sharedLanguages = getSharedLanguages(draftProfile, family);
   const fitChips = getFamilyFitChips(draftProfile, family);
   const sharedConnectionAvailable = !isMatched && linkedParentMatchedFamilyIds.includes(family.id);
   const actionLabel = isMatched ? 'Open chat' : isLiked ? 'Pending' : sharedConnectionAvailable ? 'Add to my account' : 'Interested';
@@ -88,6 +90,15 @@ export default function FamilyDetailScreen() {
       <Card>
         <Text style={styles.sectionTitle}>About this family</Text>
         <Text style={styles.body}>{family.summary}</Text>
+        {family.expecting ? (
+          <>
+            <Text style={styles.sectionTitle}>Expecting</Text>
+            <View style={styles.row}>
+              <Chip label="Expecting" />
+              <Chip label={formatDueMonthLabel(family.expecting.dueMonth)} />
+            </View>
+          </>
+        ) : null}
         <Text style={styles.sectionTitle}>Parent interests</Text>
         <View style={styles.row}>
           {(familyPrimaryParent?.interests ?? []).map((item) => (
@@ -101,23 +112,27 @@ export default function FamilyDetailScreen() {
           ))}
         </View>
         <Text style={styles.sectionTitle}>Children</Text>
-        <View style={styles.childStack}>
-          {familyChildren.map((child) => {
-            const birthdayLabel = formatChildBirthdayLabel(child.name, child.birthDate);
-            return (
-              <View key={child.id} style={styles.childBlock}>
-                <Text style={styles.childName}>{child.name}</Text>
-                <Text style={styles.body}>{formatAgeLabelFromBirthDate(child.birthDate)}</Text>
-                {isMatched && birthdayLabel ? <Text style={styles.metaLine}>{birthdayLabel}</Text> : null}
-                <View style={styles.row}>
-                  {child.interests.map((item) => (
-                    <Chip key={`${child.id}-${item}`} label={item} />
-                  ))}
+        {familyChildren.length > 0 ? (
+          <View style={styles.childStack}>
+            {familyChildren.map((child) => {
+              const birthdayLabel = formatChildBirthdayLabel(child.name, child.birthDate);
+              return (
+                <View key={child.id} style={styles.childBlock}>
+                  <Text style={styles.childName}>{child.name}</Text>
+                  <Text style={styles.body}>{formatAgeLabelFromBirthDate(child.birthDate)}</Text>
+                  {isMatched && birthdayLabel ? <Text style={styles.metaLine}>{birthdayLabel}</Text> : null}
+                  <View style={styles.row}>
+                    {child.interests.map((item) => (
+                      <Chip key={`${child.id}-${item}`} label={item} />
+                    ))}
+                  </View>
                 </View>
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
+        ) : (
+          <Text style={styles.body}>No born children added yet. This family is currently matching through parent details and expecting stage.</Text>
+        )}
         {isMatched && familyPrimaryParent?.birthDate ? (
           <>
             <Text style={styles.sectionTitle}>Parent birthday</Text>
@@ -136,7 +151,7 @@ export default function FamilyDetailScreen() {
       <Card>
         <Text style={styles.sectionTitle}>Shared interests</Text>
         <View style={styles.row}>
-          {sharedInterests.length > 0 ? sharedInterests.map((item) => <Chip key={item} label={item} />) : <Chip label="Good age fit" />}
+          {sharedInterests.length > 0 ? sharedInterests.map((item) => <Chip key={item} label={item} />) : <Chip label={fitChips[0] ?? 'Good fit'} />}
         </View>
         <Text style={styles.sectionTitle}>Shared languages</Text>
         <View style={styles.row}>

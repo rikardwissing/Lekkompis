@@ -23,6 +23,7 @@ import {
 } from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
+import { formatDueMonthLabel } from '@/utils/birthdays';
 
 export default function ConnectionsScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -125,6 +126,7 @@ export default function ConnectionsScreen() {
               const publicParent = getPrimaryParent(family);
               const hasThread = threads.some((thread) => thread.route === `/chat/${family.id}-match`);
               const familyBirthdayNote = getUpcomingBirthdayEventsForFamily(family)[0]?.label;
+              const expectingNote = family.expecting ? formatDueMonthLabel(family.expecting.dueMonth) : null;
 
               return (
                 <Card key={family.id}>
@@ -135,6 +137,7 @@ export default function ConnectionsScreen() {
                       <Text style={styles.body}>
                         Mutual match in {family.area}. {family.meetupNote}
                       </Text>
+                      {expectingNote ? <Text style={styles.birthdayNote}>{expectingNote}</Text> : null}
                       {familyBirthdayNote ? <Text style={styles.birthdayNote}>{familyBirthdayNote}</Text> : null}
                     </View>
                   </View>

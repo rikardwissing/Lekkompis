@@ -7,7 +7,7 @@ import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
 type PublicEventCardProps = {
-  ageRange: string;
+  audienceLabel: string;
   area: string;
   attendeeCount: number;
   capacity: number;
@@ -27,7 +27,7 @@ type PublicEventCardProps = {
 };
 
 export function PublicEventCard({
-  ageRange,
+  audienceLabel,
   area,
   attendeeCount,
   capacity,
@@ -71,7 +71,7 @@ export function PublicEventCard({
       </Text>
 
       <View style={styles.chips}>
-        <Chip label={ageRange} />
+        <Chip label={audienceLabel} />
         {topActivity ? <Chip label={topActivity} /> : null}
         <Chip label={`${attendeeCount}/${capacity} families`} />
       </View>

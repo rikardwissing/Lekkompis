@@ -4,10 +4,10 @@ import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { PhotoStrip } from '@/components/ui/PhotoStrip';
-import type { ChildProfile } from '@/store/app-store';
+import type { ChildProfile, ExpectingProfile } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
-import { formatChildrenSummary, getAllChildInterests } from '@/utils/birthdays';
+import { formatDueMonthLabel, formatChildrenSummary, getAllChildInterests } from '@/utils/birthdays';
 
 type FamilyCardProps = {
   parentName: string;
@@ -16,6 +16,7 @@ type FamilyCardProps = {
   area: string;
   summary: string;
   children: ChildProfile[];
+  expecting?: ExpectingProfile | null;
   parentInterests: string[];
   languages: string[];
   fitChips: string[];
@@ -34,6 +35,7 @@ export function FamilyCard({
   area,
   summary,
   children,
+  expecting,
   parentInterests,
   languages,
   fitChips,
@@ -47,7 +49,10 @@ export function FamilyCard({
   const interestedLabel = status === 'matched' ? 'Open' : status === 'liked' ? 'Pending' : 'Interested';
   const interestedDisabled = status === 'liked';
   const childSummary = formatChildrenSummary(children);
+  const dueMonthLabel = expecting?.dueMonth ? formatDueMonthLabel(expecting.dueMonth) : null;
+  const familySummary = childSummary && dueMonthLabel ? `${childSummary} · ${dueMonthLabel}` : childSummary || dueMonthLabel;
   const childInterests = getAllChildInterests(children);
+  const allFitChips = [...(expecting ? ['Expecting'] : []), ...fitChips];
 
   return (
     <Card>
@@ -62,9 +67,9 @@ export function FamilyCard({
       </View>
       <Text style={styles.summary}>{summary}</Text>
       <PhotoStrip photos={photoUrls} size={96} />
-      <Text style={styles.child}>{childSummary}</Text>
+      {familySummary ? <Text style={styles.child}>{familySummary}</Text> : null}
       <View style={styles.chips}>
-        {fitChips.map((item) => (
+        {allFitChips.map((item) => (
           <Chip key={item} label={item} />
         ))}
       </View>
@@ -76,10 +81,18 @@ export function FamilyCard({
         <Text style={styles.metaTitle}>Spoken languages</Text>
         <Text style={styles.metaCopy}>{languages.join(' · ')}</Text>
       </View>
-      <View style={styles.metaBlock}>
-        <Text style={styles.metaTitle}>Child interests</Text>
-        <Text style={styles.metaCopy}>{childInterests.join(' · ')}</Text>
-      </View>
+      {childInterests.length > 0 ? (
+        <View style={styles.metaBlock}>
+          <Text style={styles.metaTitle}>Child interests</Text>
+          <Text style={styles.metaCopy}>{childInterests.join(' · ')}</Text>
+        </View>
+      ) : null}
+      {dueMonthLabel ? (
+        <View style={styles.metaBlock}>
+          <Text style={styles.metaTitle}>Expecting</Text>
+          <Text style={styles.metaCopy}>{dueMonthLabel}</Text>
+        </View>
+      ) : null}
       <View style={styles.metaBlock}>
         <Text style={styles.metaTitle}>Family vibe</Text>
         <Text style={styles.metaCopy}>{familyVibe.join(' · ')}</Text>

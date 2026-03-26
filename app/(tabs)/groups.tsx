@@ -11,6 +11,7 @@ import { Screen } from '@/components/ui/Screen';
 import { getActiveParent, getPrimaryParent, useAppStore } from '@/store/app-store';
 import {
   getGroupAttentionCount,
+  getGroupAudienceLabel,
   getHostedRequestGroups,
   getPendingGroupJoinRequestCount,
   getPrivateInvitations,
@@ -126,7 +127,7 @@ export default function GroupsScreen() {
       <Card>
         <Text style={styles.sectionTitle}>Host something new</Text>
         <Text style={styles.body}>
-          Create an invite-only plan for your matches or publish a public event that nearby parents can discover and request to join.
+          Create an invite-only plan for your matches or publish a public event that nearby parents can discover within the right family stage.
         </Text>
         <Button label="Host an event" onPress={() => router.push('/group/create')} />
       </Card>
@@ -162,7 +163,7 @@ export default function GroupsScreen() {
                       {groupPlayDate.note}
                     </Text>
                     <View style={styles.chips}>
-                      <Chip label={groupPlayDate.ageRange} />
+                      <Chip label={getGroupAudienceLabel(groupPlayDate)} />
                       <Chip label={`${groupPlayDate.attendeeFamilyIds.length}/${groupPlayDate.capacity} families`} />
                     </View>
                     {attendeeNames.length > 0 ? (
@@ -289,7 +290,7 @@ export default function GroupsScreen() {
                   </Text>
                   <View style={styles.chips}>
                     <Chip label={groupPlayDate.visibility === 'public' ? 'Public' : 'Invite-only'} />
-                    <Chip label={groupPlayDate.ageRange} />
+                    <Chip label={getGroupAudienceLabel(groupPlayDate)} />
                     <Chip label={`Hosted by ${hostFamily?.parentName ?? 'a nearby parent'}`} />
                   </View>
                   <Text numberOfLines={2} style={styles.supportingCopy}>

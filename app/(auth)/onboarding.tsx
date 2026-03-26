@@ -8,8 +8,8 @@ import { spacing } from '@/theme/spacing';
 
 const steps = [
   ['Local first', 'Discover nearby parents and families by area, not exact address.'],
-  ['A good family fit', 'See children\'s ages and interests together with parent vibe and practical preferences.'],
-  ['Easy first meetup', 'Start with chat and plan a public first playdate.'],
+  ['A good family fit', 'See children\'s ages, expecting stage, and parent vibe together with practical preferences.'],
+  ['Easy first meetup', 'Start with chat and plan a calm first meetup that fits your family stage.'],
 ] as const;
 
 export default function OnboardingScreen() {

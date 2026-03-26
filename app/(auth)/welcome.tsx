@@ -12,9 +12,9 @@ export default function WelcomeScreen() {
       <View style={styles.container}>
         <LinearGradient colors={[colors.primarySoft, '#F6EFE5']} style={styles.hero}>
           <Text style={styles.kicker}>Lekkompis</Text>
-          <Text style={styles.title}>Meet nearby parents for simple, safe playdates.</Text>
+          <Text style={styles.title}>Meet nearby parents for simple, safe first meetups.</Text>
           <Text style={styles.subtitle}>
-            A warm, local way to find families nearby whose children are a good fit — and whose parents feel easy to meet.
+            A warm, local way to find nearby parents whose family stage feels like a fit, and whose company feels easy to meet.
           </Text>
         </LinearGradient>
 

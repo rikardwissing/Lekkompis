@@ -29,6 +29,7 @@ import {
   getMonthOnlyDifference,
   getNextBirthdayInfo,
 } from '@/utils/birthdays';
+import { getDistanceBucketLabel, getDistanceKm, isWithinRadius } from '@/utils/location';
 
 type ConversationThreadInput = {
   currentFamilyId: string;
@@ -176,6 +177,18 @@ export const getFamilyFitChips = (draftProfile: DraftProfile, family: Family) =>
 
   return unique([...(family.shared ?? []), ...(ageFit ? [ageFit] : []), ...(dueMonthFit ? [dueMonthFit] : []), ...parentFitChips]);
 };
+
+export const getFamilyDistanceKm = (draftProfile: DraftProfile, family: Family) =>
+  getDistanceKm(draftProfile.homeLocation, family.homeLocation);
+
+export const getFamilyDistanceLabel = (draftProfile: DraftProfile, family: Family) =>
+  getDistanceBucketLabel(getFamilyDistanceKm(draftProfile, family));
+
+export const getGroupDistanceKm = (draftProfile: DraftProfile, groupPlayDate: GroupPlayDate) =>
+  getDistanceKm(draftProfile.homeLocation, groupPlayDate.location);
+
+export const getGroupDistanceLabel = (draftProfile: DraftProfile, groupPlayDate: GroupPlayDate) =>
+  getDistanceBucketLabel(getGroupDistanceKm(draftProfile, groupPlayDate));
 
 export const getFamilyChildrenSummary = (
   children: ChildProfile[],
@@ -334,29 +347,46 @@ export const getDiscoverablePublicEvents = ({
   filters: PublicEventFilters;
   groupPlayDates: GroupPlayDate[];
 }) =>
-  groupPlayDates.filter((groupPlayDate) => {
-    if (groupPlayDate.visibility !== 'public') return false;
-    if (groupPlayDate.hostFamilyId === currentFamilyId) return false;
-    if (groupPlayDate.membership !== 'none' && groupPlayDate.membership !== 'requested') return false;
-    if (!canParticipateInAudience(draftProfile, groupPlayDate.audience)) return false;
-    if (filters.area !== 'All nearby' && groupPlayDate.area !== filters.area) return false;
-    if (filters.audience !== ANY_PUBLIC_EVENT_AUDIENCE && groupPlayDate.audience !== filters.audience) return false;
-    if (
-      filters.audience === 'children' &&
-      filters.ageRange !== ANY_PUBLIC_EVENT_AGE &&
-      groupPlayDate.ageRange !== filters.ageRange
-    ) {
-      return false;
-    }
-    if (
-      filters.selectedActivityTags.length > 0 &&
-      !filters.selectedActivityTags.some((tag) => groupPlayDate.activityTags.includes(tag))
-    ) {
-      return false;
-    }
+  groupPlayDates
+    .map((groupPlayDate, index) => ({
+      distanceKm: getDistanceKm(draftProfile.homeLocation, groupPlayDate.location),
+      groupPlayDate,
+      index,
+    }))
+    .filter(({ groupPlayDate }) => {
+      if (groupPlayDate.visibility !== 'public') return false;
+      if (groupPlayDate.hostFamilyId === currentFamilyId) return false;
+      if (groupPlayDate.membership !== 'none' && groupPlayDate.membership !== 'requested') return false;
+      if (!canParticipateInAudience(draftProfile, groupPlayDate.audience)) return false;
+      if (!isWithinRadius(draftProfile.homeLocation, groupPlayDate.location, filters.radiusKm)) return false;
+      if (filters.audience !== ANY_PUBLIC_EVENT_AUDIENCE && groupPlayDate.audience !== filters.audience) return false;
+      if (
+        filters.audience === 'children' &&
+        filters.ageRange !== ANY_PUBLIC_EVENT_AGE &&
+        groupPlayDate.ageRange !== filters.ageRange
+      ) {
+        return false;
+      }
+      if (
+        filters.selectedActivityTags.length > 0 &&
+        !filters.selectedActivityTags.some((tag) => groupPlayDate.activityTags.includes(tag))
+      ) {
+        return false;
+      }
 
-    return true;
-  });
+      return true;
+    })
+    .sort((left, right) => {
+      const leftDistance = left.distanceKm ?? Number.POSITIVE_INFINITY;
+      const rightDistance = right.distanceKm ?? Number.POSITIVE_INFINITY;
+
+      if (leftDistance !== rightDistance) {
+        return leftDistance - rightDistance;
+      }
+
+      return left.index - right.index;
+    })
+    .map(({ groupPlayDate }) => groupPlayDate);
 
 export const getConversationThreads = ({
   currentFamilyId,
@@ -434,7 +464,7 @@ export const getConversationThreads = ({
       id: matchId,
       kind: 'direct',
       title: publicParent.firstName,
-      subtitle: `Direct chat - ${family.area}`,
+      subtitle: 'Direct chat',
       lastMessagePreview: buildConversationPreview(lastMessage),
       lastActivityAt: lastMessage.createdAt,
       route: `/chat/${matchId}`,

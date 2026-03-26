@@ -16,7 +16,13 @@ import {
   getPrimaryParent,
   useAppStore,
 } from '@/store/app-store';
-import { getFamilyFitChips, getSharedChildInterests, getSharedLanguages, getSharedParentInterests } from '@/store/derived';
+import {
+  getFamilyDistanceLabel,
+  getFamilyFitChips,
+  getSharedChildInterests,
+  getSharedLanguages,
+  getSharedParentInterests,
+} from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { formatAgeLabelFromBirthDate, formatChildBirthdayLabel, formatDueMonthLabel, formatParentBirthdayLabel } from '@/utils/birthdays';
@@ -68,6 +74,7 @@ export default function FamilyDetailScreen() {
   ];
   const sharedLanguages = getSharedLanguages(draftProfile, family);
   const fitChips = getFamilyFitChips(draftProfile, family);
+  const distanceLabel = getFamilyDistanceLabel(draftProfile, family);
   const sharedConnectionAvailable = !isMatched && linkedParentMatchedFamilyIds.includes(family.id);
   const actionLabel = isMatched ? 'Open chat' : isLiked ? 'Pending' : sharedConnectionAvailable ? 'Add to my account' : 'Interested';
 
@@ -83,12 +90,15 @@ export default function FamilyDetailScreen() {
         <Avatar name={familyPrimaryParent?.firstName ?? 'Parent'} imageUrl={familyPrimaryParent?.avatarUrl} size={72} />
         <View style={styles.heroText}>
           <Text style={styles.title}>{familyPrimaryParent?.firstName ?? 'Parent'}</Text>
-          <Text style={styles.subtitle}>{family.area}</Text>
+          <Text style={styles.subtitle}>{distanceLabel ?? 'Nearby family'}</Text>
         </View>
       </View>
       <PhotoStrip photos={family.photoUrls} size={116} />
       <Card>
         <Text style={styles.sectionTitle}>About this family</Text>
+        <View style={styles.row}>
+          {distanceLabel ? <Chip label={distanceLabel} /> : null}
+        </View>
         <Text style={styles.body}>{family.summary}</Text>
         {family.expecting ? (
           <>

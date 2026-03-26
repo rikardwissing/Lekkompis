@@ -64,12 +64,13 @@ export default function ChildProfileScreen() {
   const updateDraftChild = useAppStore((state) => state.updateDraftChild);
   const toggleDraftChildInterest = useAppStore((state) => state.toggleDraftChildInterest);
   const children = draftProfile.children ?? [];
+  const hasHomeLocation = Boolean(draftProfile.homeLocation);
   const hasValidBornChild = children.some(
     (child) => child.name.trim().length > 0 && child.birthDate.trim().length > 0 && isValidDateOnly(child.birthDate)
   );
   const hasValidDueMonth = Boolean(draftProfile.expecting?.dueMonth && isValidMonthOnly(draftProfile.expecting.dueMonth));
 
-  const canContinue = hasValidBornChild || hasValidDueMonth;
+  const canContinue = hasHomeLocation && (hasValidBornChild || hasValidDueMonth);
 
   return (
     <Screen scroll>
@@ -99,7 +100,9 @@ export default function ChildProfileScreen() {
 
       {!canContinue ? (
         <Text style={styles.helper}>
-          Add at least one child with a name and birthday, or add an expecting due month on the parent step before going to Discover.
+          {!hasHomeLocation
+            ? 'Add a home location on the parent step before going to Discover.'
+            : 'Add at least one child with a name and birthday, or add an expecting due month on the parent step before going to Discover.'}
         </Text>
       ) : null}
 

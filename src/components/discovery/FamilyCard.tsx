@@ -13,7 +13,7 @@ type FamilyCardProps = {
   parentName: string;
   avatarUrl: string;
   photoUrls: string[];
-  area: string;
+  distanceLabel?: string | null;
   summary: string;
   children: ChildProfile[];
   expecting?: ExpectingProfile | null;
@@ -32,7 +32,7 @@ export function FamilyCard({
   parentName,
   avatarUrl,
   photoUrls,
-  area,
+  distanceLabel,
   summary,
   children,
   expecting,
@@ -52,7 +52,7 @@ export function FamilyCard({
   const dueMonthLabel = expecting?.dueMonth ? formatDueMonthLabel(expecting.dueMonth) : null;
   const familySummary = childSummary && dueMonthLabel ? `${childSummary} · ${dueMonthLabel}` : childSummary || dueMonthLabel;
   const childInterests = getAllChildInterests(children);
-  const allFitChips = [...(expecting ? ['Expecting'] : []), ...fitChips];
+  const allFitChips = [...(expecting ? ['Expecting'] : []), ...(distanceLabel ? [distanceLabel] : []), ...fitChips];
 
   return (
     <Card>
@@ -61,7 +61,6 @@ export function FamilyCard({
           <Avatar name={parentName} imageUrl={avatarUrl} />
           <View style={styles.identityText}>
             <Text style={styles.name}>{parentName}</Text>
-            <Text style={styles.area}>{area}</Text>
           </View>
         </View>
       </View>

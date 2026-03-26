@@ -157,7 +157,7 @@ export default function GroupsScreen() {
                     </View>
                     <Text style={styles.cardTitle}>{groupPlayDate.title}</Text>
                     <Text style={styles.body}>
-                      Hosted by {hostFamily?.parentName ?? 'a nearby parent'} · {groupPlayDate.locationName} · {groupPlayDate.area}
+                      Hosted by {hostFamily?.parentName ?? 'a nearby parent'} · {groupPlayDate.locationName}
                     </Text>
                     <Text numberOfLines={2} style={styles.supportingCopy}>
                       {groupPlayDate.note}
@@ -286,7 +286,7 @@ export default function GroupsScreen() {
                   </View>
                   <Text style={styles.cardTitle}>{groupPlayDate.title}</Text>
                   <Text style={styles.body}>
-                    {groupPlayDate.locationName} · {groupPlayDate.area}
+                    {groupPlayDate.locationName}
                   </Text>
                   <View style={styles.chips}>
                     <Chip label={groupPlayDate.visibility === 'public' ? 'Public' : 'Invite-only'} />

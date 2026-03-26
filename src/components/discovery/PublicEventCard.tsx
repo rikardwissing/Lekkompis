@@ -8,12 +8,12 @@ import { spacing } from '@/theme/spacing';
 
 type PublicEventCardProps = {
   audienceLabel: string;
-  area: string;
   attendeeCount: number;
   capacity: number;
   ctaDisabled?: boolean;
   ctaLabel: string;
   dateLabel: string;
+  distanceLabel?: string | null;
   hostAvatarUrl?: string;
   hostName: string;
   locationName: string;
@@ -28,12 +28,12 @@ type PublicEventCardProps = {
 
 export function PublicEventCard({
   audienceLabel,
-  area,
   attendeeCount,
   capacity,
   ctaDisabled = false,
   ctaLabel,
   dateLabel,
+  distanceLabel,
   hostAvatarUrl,
   hostName,
   locationName,
@@ -60,9 +60,7 @@ export function PublicEventCard({
         <Avatar imageUrl={hostAvatarUrl} name={hostName} size={40} />
         <View style={styles.hostCopy}>
           <Text style={styles.hostName}>Hosted by {hostName}</Text>
-          <Text style={styles.locationLine}>
-            {locationName} · {area}
-          </Text>
+          <Text style={styles.locationLine}>{locationName}</Text>
         </View>
       </View>
 
@@ -72,6 +70,7 @@ export function PublicEventCard({
 
       <View style={styles.chips}>
         <Chip label={audienceLabel} />
+        {distanceLabel ? <Chip label={distanceLabel} /> : null}
         {topActivity ? <Chip label={topActivity} /> : null}
         <Chip label={`${attendeeCount}/${capacity} families`} />
       </View>

@@ -9,7 +9,7 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { getActiveParent, getPrimaryParent, useAppStore } from '@/store/app-store';
-import { canActiveParentViewGroup, getGroupAudienceLabel, isGroupFull } from '@/store/derived';
+import { canActiveParentViewGroup, getGroupAudienceLabel, getGroupDistanceLabel, isGroupFull } from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
@@ -138,6 +138,7 @@ export default function GroupDetailScreen() {
               ? 'Public event'
               : 'Invite-only';
   const full = isGroupFull(groupPlayDate);
+  const distanceLabel = getGroupDistanceLabel(draftProfile, groupPlayDate);
 
   return (
     <Screen
@@ -159,9 +160,7 @@ export default function GroupDetailScreen() {
           <Avatar name={host?.parentName ?? 'Host'} imageUrl={host?.avatarUrl} />
           <View style={styles.identityText}>
             <Text style={styles.sectionTitle}>Hosted by {host?.parentName ?? 'a nearby parent'}</Text>
-            <Text style={styles.body}>
-              {groupPlayDate.area} · {getGroupAudienceLabel(groupPlayDate)}
-            </Text>
+            <Text style={styles.body}>{getGroupAudienceLabel(groupPlayDate)}</Text>
             {activeParent ? <Text style={styles.body}>Coordinating as {activeParent.firstName}</Text> : null}
           </View>
         </View>
@@ -169,6 +168,7 @@ export default function GroupDetailScreen() {
           <Chip label={statusLabel} />
           <Chip label={groupPlayDate.visibility === 'public' ? 'Public' : 'Invite-only'} />
           <Chip label={getGroupAudienceLabel(groupPlayDate)} />
+          {distanceLabel ? <Chip label={distanceLabel} /> : null}
           <Chip label={`${groupPlayDate.attendeeFamilyIds.length}/${groupPlayDate.capacity} families`} />
           {groupPlayDate.activityTags.map((tag) => (
             <Chip key={tag} label={tag} />

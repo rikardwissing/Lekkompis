@@ -1,5 +1,9 @@
 import { create } from 'zustand';
+import { DEFAULT_DISCOVERY_RADIUS_KM, getLocationPresetById } from '@/constants/locations';
 import { getAllChildInterests, isValidDateOnly, isValidMonthOnly } from '@/utils/birthdays';
+import type { DistanceRadiusKm, SavedLocation } from '@/utils/location';
+
+export type { DistanceRadiusKm, SavedLocation } from '@/utils/location';
 
 export type Availability = 'Weekends' | 'Weekday afternoons' | 'Flexible mornings';
 
@@ -38,7 +42,7 @@ export type Family = {
   parents: ParentAccount[];
   primaryParentId: string;
   photoUrls: string[];
-  area: string;
+  homeLocation: SavedLocation;
   summary: string;
   children: ChildProfile[];
   expecting: ExpectingProfile | null;
@@ -67,7 +71,7 @@ export type GroupPlayDateAudience = 'children' | 'expecting';
 export type GroupPlayDate = {
   id: string;
   title: string;
-  area: string;
+  location: SavedLocation;
   locationName: string;
   dateLabel: string;
   timeLabel: string;
@@ -99,7 +103,7 @@ export type DraftProfile = {
   primaryParentId: string;
   activeParentId: string;
   photoUrls: string[];
-  area: string;
+  homeLocation: SavedLocation | null;
   bio: string;
   familyVibe: string[];
   children: ChildProfile[];
@@ -107,7 +111,7 @@ export type DraftProfile = {
 };
 
 export type DiscoveryFilters = {
-  area: string;
+  radiusKm: DistanceRadiusKm;
   availability: Availability | 'Any';
   selectedInterests: string[];
   similarAgeOnly: boolean;
@@ -115,7 +119,7 @@ export type DiscoveryFilters = {
 };
 
 export type PublicEventFilters = {
-  area: string;
+  radiusKm: DistanceRadiusKm;
   ageRange: string;
   audience: 'all' | GroupPlayDateAudience;
   selectedActivityTags: string[];
@@ -123,7 +127,7 @@ export type PublicEventFilters = {
 
 export type CreateGroupPlayDateInput = {
   title: string;
-  area: string;
+  location: SavedLocation;
   locationName: string;
   dateLabel: string;
   timeLabel: string;
@@ -185,13 +189,13 @@ type AppState = {
   removeDraftChild: (childId: string) => void;
   updateDraftChild: (childId: string, patch: Partial<ChildProfile>) => void;
   toggleDraftChildInterest: (childId: string, value: string) => void;
-  setDiscoveryArea: (area: string) => void;
+  setDiscoveryRadius: (radiusKm: DistanceRadiusKm) => void;
   setDiscoveryAvailability: (availability: DiscoveryFilters['availability']) => void;
   setDiscoveryFamilyStage: (familyStage: DiscoveryFilters['familyStage']) => void;
   toggleDiscoveryInterest: (value: string) => void;
   toggleDiscoverySimilarAge: () => void;
   resetDiscoveryFilters: () => void;
-  setPublicEventArea: (area: string) => void;
+  setPublicEventRadius: (radiusKm: DistanceRadiusKm) => void;
   setPublicEventAudience: (audience: PublicEventFilters['audience']) => void;
   setPublicEventAgeRange: (ageRange: string) => void;
   togglePublicEventActivity: (value: string) => void;
@@ -296,6 +300,16 @@ const getFamilyIdsForParentInternal = (valuesByParent: ParentFamilyIdsByParent, 
 const getDirectSeenForParentInternal = (valuesByParent: ConversationLastSeenByParent, parentId: string) =>
   valuesByParent[parentId] ?? {};
 
+const requireLocation = (id: string) => {
+  const location = getLocationPresetById(id);
+
+  if (!location) {
+    throw new Error(`Missing location preset: ${id}`);
+  }
+
+  return location;
+};
+
 const createGroupEventMessage = ({
   body,
   createdAt,
@@ -337,7 +351,7 @@ const defaultDraftProfile: DraftProfile = {
     'https://picsum.photos/seed/anna-coffee/600/600',
     'https://picsum.photos/seed/anna-park/600/600',
   ],
-  area: 'Vasastan',
+  homeLocation: requireLocation('vasastan'),
   bio: 'Mamma to Leo and Mila, and expecting another baby in September. Looking for simple weekend meetups nearby and parent company we would genuinely enjoy seeing again.',
   familyVibe: ['Weekend meetups', 'Public place first', 'Outdoor-friendly'],
   children: [
@@ -380,7 +394,7 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/sara-2/600/600',
       'https://picsum.photos/seed/sara-3/600/600',
     ],
-    area: 'Vasastan',
+    homeLocation: requireLocation('hagastaden'),
     summary: 'Parent to Maja. Looking for easy weekend outdoor playdates and parent company that feels natural too.',
     children: [
       createChild({
@@ -391,7 +405,7 @@ const defaultFamilies: Family[] = [
       }),
     ],
     expecting: null,
-    shared: ['Same area', 'Playgrounds', 'Weekend meetups'],
+    shared: ['Nearby', 'Playgrounds', 'Weekend meetups'],
     familyVibe: ['Warm', 'Outdoor-friendly', 'Easygoing'],
     meetupNote: 'Usually starts with a public playground meetup and coffee nearby.',
     availability: ['Weekends', 'Flexible mornings'],
@@ -415,7 +429,7 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/fatima-2/600/600',
       'https://picsum.photos/seed/fatima-3/600/600',
     ],
-    area: 'Södermalm',
+    homeLocation: requireLocation('sodermalm'),
     summary: 'Parent to Nora. Loves calm cafe-and-park mornings and easy conversation with other international families.',
     children: [
       createChild({
@@ -450,7 +464,7 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/johan-2/600/600',
       'https://picsum.photos/seed/johan-3/600/600',
     ],
-    area: 'Vasastan',
+    homeLocation: requireLocation('norrmalm'),
     summary: 'Parent to Elis and Alba, with another baby due in October. Outdoor family hoping to click with both kids and parents.',
     children: [
       createChild({
@@ -493,7 +507,7 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/elin-2/600/600',
       'https://picsum.photos/seed/elin-3/600/600',
     ],
-    area: 'Östermalm',
+    homeLocation: requireLocation('ostermalm'),
     summary: 'Parent to Liv. New in the area and looking for local family friends with shared parent interests too.',
     children: [
       createChild({
@@ -529,13 +543,13 @@ const defaultFamilies: Family[] = [
       'https://picsum.photos/seed/mira-2/600/600',
       'https://picsum.photos/seed/mira-3/600/600',
     ],
-    area: 'Vasastan',
+    homeLocation: requireLocation('vasastan'),
     summary: 'Expecting a first baby in late summer and hoping to meet nearby parents before the newborn blur starts.',
     children: [],
     expecting: {
       dueMonth: '2026-08',
     },
-    shared: ['Same area', 'Warm'],
+    shared: ['Nearby', 'Warm'],
     familyVibe: ['Public place first', 'Calm pace', 'Weekend meetups'],
     meetupNote: 'Usually prefers a short coffee or walk meetup somewhere easy to reach.',
     availability: ['Weekends', 'Flexible mornings'],
@@ -642,7 +656,7 @@ const initialGroupPlayDates: GroupPlayDate[] = [
   {
     id: 'vasaparken-saturday',
     title: 'Saturday playground circle',
-    area: 'Vasastan',
+    location: requireLocation('vasastan'),
     locationName: 'Vasaparken playground',
     dateLabel: 'Sat 29 Mar',
     timeLabel: '10:00-11:30',
@@ -664,7 +678,7 @@ const initialGroupPlayDates: GroupPlayDate[] = [
   {
     id: 'animal-zoo-sunday',
     title: 'Sunday animal-themed park meetup',
-    area: 'Vasastan',
+    location: requireLocation('norrmalm'),
     locationName: 'Observatorielunden',
     dateLabel: 'Sun 30 Mar',
     timeLabel: '09:30-11:00',
@@ -686,7 +700,7 @@ const initialGroupPlayDates: GroupPlayDate[] = [
   {
     id: 'story-garden-sunday',
     title: 'Sunday story garden meetup',
-    area: 'Vasastan',
+    location: requireLocation('hagastaden'),
     locationName: 'Bellevue park garden',
     dateLabel: 'Sun 6 Apr',
     timeLabel: '10:30-12:00',
@@ -708,7 +722,7 @@ const initialGroupPlayDates: GroupPlayDate[] = [
   {
     id: 'museum-crafts-saturday',
     title: 'Saturday museum craft hour',
-    area: 'Östermalm',
+    location: requireLocation('ostermalm'),
     locationName: 'Humlegarden craft table',
     dateLabel: 'Sat 12 Apr',
     timeLabel: '14:00-15:30',
@@ -730,7 +744,7 @@ const initialGroupPlayDates: GroupPlayDate[] = [
   {
     id: 'due-date-coffee-circle',
     title: 'Due date coffee circle',
-    area: 'Vasastan',
+    location: requireLocation('hagastaden'),
     locationName: 'Norrtull cafe corner',
     dateLabel: 'Thu 3 Apr',
     timeLabel: '10:30-11:45',
@@ -751,7 +765,7 @@ const initialGroupPlayDates: GroupPlayDate[] = [
   {
     id: 'expecting-brunch-sunday',
     title: 'Sunday expecting parents brunch',
-    area: 'Kungsholmen',
+    location: requireLocation('kungsholmen'),
     locationName: 'Ralambshov cafe terrace',
     dateLabel: 'Sun 13 Apr',
     timeLabel: '11:00-12:30',
@@ -772,15 +786,15 @@ const initialGroupPlayDates: GroupPlayDate[] = [
 ];
 
 const defaultDiscoveryFilters = (draftProfile: DraftProfile): DiscoveryFilters => ({
-  area: draftProfile.area,
+  radiusKm: DEFAULT_DISCOVERY_RADIUS_KM,
   availability: 'Any',
   selectedInterests: buildInterestDefaults(draftProfile.children),
   similarAgeOnly: false,
   familyStage: 'all',
 });
 
-const defaultPublicEventFilters = (draftProfile: DraftProfile): PublicEventFilters => ({
-  area: draftProfile.area,
+const defaultPublicEventFilters = (): PublicEventFilters => ({
+  radiusKm: DEFAULT_DISCOVERY_RADIUS_KM,
   ageRange: ANY_PUBLIC_EVENT_AGE,
   audience: ANY_PUBLIC_EVENT_AUDIENCE,
   selectedActivityTags: [],
@@ -894,29 +908,21 @@ export const useAppStore = create<AppState>((set) => ({
   groupMessagesByPlayDate: initialGroupMessages,
   groupPlayDates: initialGroupPlayDates,
   discoveryFilters: defaultDiscoveryFilters(defaultDraftProfile),
-  publicEventFilters: defaultPublicEventFilters(defaultDraftProfile),
+  publicEventFilters: defaultPublicEventFilters(),
   updateDraftProfile: (patch) =>
     set((state) => {
       const nextDraft = { ...state.draftProfile, ...patch };
       return {
         draftProfile: nextDraft,
         discoveryFilters:
-          patch.area !== undefined || patch.children !== undefined
+          patch.children !== undefined
             ? {
                 ...state.discoveryFilters,
-                area: patch.area ?? state.discoveryFilters.area,
                 selectedInterests: patch.children
                   ? buildInterestDefaults(nextDraft.children ?? [])
                   : state.discoveryFilters.selectedInterests,
               }
             : state.discoveryFilters,
-        publicEventFilters:
-          patch.area !== undefined
-            ? {
-                ...state.publicEventFilters,
-                area: patch.area ?? state.publicEventFilters.area,
-              }
-            : state.publicEventFilters,
       };
     }),
   updateDraftParent: (parentId, patch) =>
@@ -1150,11 +1156,11 @@ export const useAppStore = create<AppState>((set) => ({
         },
       };
     }),
-  setDiscoveryArea: (area) =>
+  setDiscoveryRadius: (radiusKm) =>
     set((state) => ({
       discoveryFilters: {
         ...state.discoveryFilters,
-        area,
+        radiusKm,
       },
     })),
   setDiscoveryAvailability: (availability) =>
@@ -1189,11 +1195,11 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       discoveryFilters: defaultDiscoveryFilters(state.draftProfile),
     })),
-  setPublicEventArea: (area) =>
+  setPublicEventRadius: (radiusKm) =>
     set((state) => ({
       publicEventFilters: {
         ...state.publicEventFilters,
-        area,
+        radiusKm,
       },
     })),
   setPublicEventAudience: (audience) =>
@@ -1220,14 +1226,15 @@ export const useAppStore = create<AppState>((set) => ({
       },
     })),
   resetPublicEventFilters: () =>
-    set((state) => ({
-      publicEventFilters: defaultPublicEventFilters(state.draftProfile),
+    set(() => ({
+      publicEventFilters: defaultPublicEventFilters(),
     })),
   resetDemoState: () =>
     set(() => ({
       currentFamilyId: CURRENT_FAMILY_ID,
       draftProfile: defaultDraftProfile,
       coParentInvite: null,
+      families: defaultFamilies,
       likedFamilyIdsByParent: defaultLikedFamilyIdsByParent,
       passedFamilyIdsByParent: defaultPassedFamilyIdsByParent,
       matchedFamilyIdsByParent: defaultMatchedFamilyIdsByParent,
@@ -1237,7 +1244,7 @@ export const useAppStore = create<AppState>((set) => ({
       groupMessagesByPlayDate: initialGroupMessages,
       groupPlayDates: initialGroupPlayDates,
       discoveryFilters: defaultDiscoveryFilters(defaultDraftProfile),
-      publicEventFilters: defaultPublicEventFilters(defaultDraftProfile),
+      publicEventFilters: defaultPublicEventFilters(),
     })),
   likeFamily: (id) =>
     set((state) => {
@@ -1607,7 +1614,7 @@ export const useAppStore = create<AppState>((set) => ({
         {
           id,
           title: input.title,
-          area: input.area,
+          location: input.location,
           locationName: input.locationName,
           dateLabel: input.dateLabel,
           timeLabel: input.timeLabel,

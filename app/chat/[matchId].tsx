@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChatThread, type ChatToolSection } from '@/components/chat/ChatThread';
 import { buildChatRenderableItems } from '@/components/chat/chat-presenters';
 import { SubscreenHeader } from '@/components/navigation/SubscreenHeader';
@@ -146,6 +147,10 @@ export default function ChatScreen() {
     );
   }
 
+  const openMatchProfile = () => {
+    router.push({ pathname: '/family/[id]', params: { id: matchFamily.id } });
+  };
+
   const submit = () => {
     const trimmed = draft.trim();
 
@@ -172,15 +177,29 @@ export default function ChatScreen() {
         }
         canSend={canSend}
         context={
-          <View style={styles.contextStrip}>
+          <Pressable
+            accessibilityHint="Opens the matched family's profile"
+            accessibilityLabel={`Open ${matchPublicParent?.firstName ?? 'this parent'}'s profile`}
+            accessibilityRole="button"
+            onPress={openMatchProfile}
+            style={({ pressed }) => [styles.contextStrip, pressed ? styles.pressed : null]}
+          >
             <Avatar imageUrl={matchPublicParent?.avatarUrl} name={matchPublicParent?.firstName ?? 'Parent'} size={42} />
             <View style={styles.contextCopy}>
-              <Text style={styles.contextTitle}>{matchPublicParent?.firstName ?? 'Parent'}</Text>
+              <View style={styles.contextHeaderRow}>
+                <Text numberOfLines={1} style={styles.contextTitle}>
+                  {matchPublicParent?.firstName ?? 'Parent'}
+                </Text>
+                <View style={styles.contextAction}>
+                  <Text style={styles.contextActionText}>Profile</Text>
+                  <Ionicons color={colors.primary} name="chevron-forward" size={14} />
+                </View>
+              </View>
               <Text numberOfLines={2} style={styles.contextBody}>
                 {matchFamily.meetupNote}
               </Text>
             </View>
-          </View>
+          </Pressable>
         }
         draft={draft}
         items={chatItems}
@@ -217,14 +236,38 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xs,
   },
+  contextHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
   contextTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: colors.text,
+    flex: 1,
+  },
+  contextAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  contextActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
   },
   contextBody: {
     fontSize: 13,
     lineHeight: 18,
     color: colors.textMuted,
+  },
+  pressed: {
+    opacity: 0.84,
   },
 });

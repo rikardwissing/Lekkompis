@@ -3,15 +3,18 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { LocationField } from '@/components/ui/LocationField';
 import { SelectableChip } from '@/components/ui/SelectableChip';
 import { TextField } from '@/components/ui/TextField';
 import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { BirthdayField } from '@/components/ui/BirthdayField';
 import { MonthField } from '@/components/ui/MonthField';
-import { areaOptions, familyVibeOptions, languageOptions, parentInterestOptions } from '@/constants/demo-profiles';
+import { stockholmLocationPresets } from '@/constants/locations';
+import { familyVibeOptions, languageOptions, parentInterestOptions } from '@/constants/demo-profiles';
 import { getPrimaryParent, useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
+import { getPrivateLocationLabel } from '@/utils/location';
 
 export default function ParentProfileScreen() {
   const draftProfile = useAppStore((state) => state.draftProfile);
@@ -21,6 +24,7 @@ export default function ParentProfileScreen() {
   const toggleParentInterest = useAppStore((state) => state.toggleParentInterest);
   const toggleLanguage = useAppStore((state) => state.toggleLanguage);
   const primaryParent = getPrimaryParent(draftProfile);
+  const canContinue = Boolean(draftProfile.homeLocation);
 
   return (
     <Screen scroll>
@@ -46,12 +50,21 @@ export default function ParentProfileScreen() {
           <Text style={styles.helper}>Temporary placeholder photos for the prototype to make each parent profile feel more personal.</Text>
         </View>
         <View style={styles.section}>
-          <Text style={styles.label}>Area</Text>
-          <View style={styles.row}>
-            {areaOptions.map((area) => (
-              <SelectableChip key={area} label={area} selected={draftProfile.area === area} onPress={() => updateDraftProfile({ area })} />
-            ))}
-          </View>
+          <LocationField
+            helperText={
+              draftProfile.homeLocation
+                ? 'Private home address. It is only used to calculate distance and never shown to other parents.'
+                : 'Choose your home address. It stays private and is only used to calculate distance.'
+            }
+            label="Home address (private)"
+            onChange={(homeLocation) => updateDraftProfile({ homeLocation })}
+            placeholder="Search by street or address"
+            suggestionMetaFormatter={() => 'Private address · never shown publicly'}
+            suggestionTitleFormatter={getPrivateLocationLabel}
+            suggestions={stockholmLocationPresets}
+            valueFormatter={getPrivateLocationLabel}
+            value={draftProfile.homeLocation}
+          />
         </View>
         <TextField label="Short intro" value={draftProfile.bio} onChangeText={(value) => updateDraftProfile({ bio: value })} multiline />
         <BirthdayField
@@ -124,7 +137,7 @@ export default function ParentProfileScreen() {
           ) : null}
         </View>
       </Card>
-      <Button label="Continue to child profile" onPress={() => router.push('/(setup)/child-profile')} />
+      <Button disabled={!canContinue} label="Continue to child profile" onPress={() => router.push('/(setup)/child-profile')} />
     </Screen>
   );
 }

@@ -7,7 +7,7 @@ import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
 const steps = [
-  ['Local first', 'Discover nearby parents and families by area, not exact address.'],
+  ['Local first', 'Discover nearby parents and families by neighborhood, not exact address.'],
   ['A good family fit', 'See children\'s ages, expecting stage, and parent vibe together with practical preferences.'],
   ['Easy first meetup', 'Start with chat and plan a calm first meetup that fits your family stage.'],
 ] as const;

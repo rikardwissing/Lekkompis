@@ -17,6 +17,7 @@ import {
 } from '@/store/app-store';
 import {
   getConversationThreads,
+  getFamilyDistanceLabel,
   getMatchedFamilies,
   getPendingFamilies,
   getUpcomingBirthdayEventsForFamily,
@@ -127,6 +128,7 @@ export default function ConnectionsScreen() {
               const hasThread = threads.some((thread) => thread.route === `/chat/${family.id}-match`);
               const familyBirthdayNote = getUpcomingBirthdayEventsForFamily(family)[0]?.label;
               const expectingNote = family.expecting ? formatDueMonthLabel(family.expecting.dueMonth) : null;
+              const distanceLabel = getFamilyDistanceLabel(draftProfile, family);
 
               return (
                 <Card key={family.id}>
@@ -135,8 +137,9 @@ export default function ConnectionsScreen() {
                     <View style={styles.identityText}>
                       <Text style={styles.cardTitle}>{publicParent?.firstName ?? 'Parent'}</Text>
                       <Text style={styles.body}>
-                        Mutual match in {family.area}. {family.meetupNote}
+                        Mutual match nearby. {family.meetupNote}
                       </Text>
+                      {distanceLabel ? <Text style={styles.birthdayNote}>{distanceLabel}</Text> : null}
                       {expectingNote ? <Text style={styles.birthdayNote}>{expectingNote}</Text> : null}
                       {familyBirthdayNote ? <Text style={styles.birthdayNote}>{familyBirthdayNote}</Text> : null}
                     </View>
@@ -201,9 +204,9 @@ export default function ConnectionsScreen() {
               return (
                 <View key={family.id} style={styles.pendingRow}>
                   <Avatar name={publicParent?.firstName ?? 'Parent'} imageUrl={publicParent?.avatarUrl} size={40} />
-                <Text style={styles.pendingItem}>
-                    {publicParent?.firstName ?? 'Parent'} in {family.area}
-                </Text>
+                  <Text style={styles.pendingItem}>
+                    {publicParent?.firstName ?? 'Parent'} nearby
+                  </Text>
               </View>
               );
             })}

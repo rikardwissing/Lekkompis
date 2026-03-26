@@ -1,5 +1,3 @@
-export const areaOptions = ['Vasastan', 'Södermalm', 'Östermalm', 'Kungsholmen'];
-
 export const familyVibeOptions = [
   'Weekend meetups',
   'Public place first',

@@ -10,8 +10,8 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { SelectableChip } from '@/components/ui/SelectableChip';
+import { DEFAULT_DISCOVERY_RADIUS_KM, distanceRadiusOptions } from '@/constants/locations';
 import {
-  areaOptions,
   availabilityOptions,
   childInterestOptions,
   expectingActivityOptions,
@@ -21,6 +21,7 @@ import {
 import {
   ANY_PUBLIC_EVENT_AGE,
   ANY_PUBLIC_EVENT_AUDIENCE,
+  type DistanceRadiusKm,
   getActiveLikedFamilyIds,
   getActiveMatchedFamilyIds,
   getActivePassedFamilyIds,
@@ -32,7 +33,9 @@ import {
 import {
   getDueMonthGapSortValue,
   getDiscoverablePublicEvents,
+  getFamilyDistanceLabel,
   getFamilyFitChips,
+  getGroupDistanceLabel,
   getGroupAudienceLabel,
   getSharedFamilyVibeCount,
   getSharedLanguageCount,
@@ -44,8 +47,12 @@ import {
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { getAllChildInterests } from '@/utils/birthdays';
+import { getDistanceKm, isWithinRadius } from '@/utils/location';
 
 type DiscoverMode = 'families' | 'events';
+
+const formatRadiusLabel = (radiusKm: DistanceRadiusKm) =>
+  radiusKm === null ? 'Any distance' : `Within ${radiusKm} km`;
 
 function SegmentButton({
   active,
@@ -78,13 +85,13 @@ export default function DiscoverScreen() {
   const groupPlayDates = useAppStore((state) => state.groupPlayDates);
   const likeFamily = useAppStore((state) => state.likeFamily);
   const passFamily = useAppStore((state) => state.passFamily);
-  const setDiscoveryArea = useAppStore((state) => state.setDiscoveryArea);
+  const setDiscoveryRadius = useAppStore((state) => state.setDiscoveryRadius);
   const setDiscoveryAvailability = useAppStore((state) => state.setDiscoveryAvailability);
   const setDiscoveryFamilyStage = useAppStore((state) => state.setDiscoveryFamilyStage);
   const toggleDiscoveryInterest = useAppStore((state) => state.toggleDiscoveryInterest);
   const toggleDiscoverySimilarAge = useAppStore((state) => state.toggleDiscoverySimilarAge);
   const resetDiscoveryFilters = useAppStore((state) => state.resetDiscoveryFilters);
-  const setPublicEventArea = useAppStore((state) => state.setPublicEventArea);
+  const setPublicEventRadius = useAppStore((state) => state.setPublicEventRadius);
   const setPublicEventAudience = useAppStore((state) => state.setPublicEventAudience);
   const setPublicEventAgeRange = useAppStore((state) => state.setPublicEventAgeRange);
   const togglePublicEventActivity = useAppStore((state) => state.togglePublicEventActivity);
@@ -120,11 +127,15 @@ export default function DiscoverScreen() {
   const visibleFamilies = useMemo(
     () =>
       families
-        .map((family, index) => ({ family, index }))
+        .map((family, index) => ({
+          distanceKm: getDistanceKm(draftProfile.homeLocation, family.homeLocation),
+          family,
+          index,
+        }))
         .filter(({ family }) => {
           const familyChildren = family.children ?? [];
           if (passedFamilyIds.includes(family.id)) return false;
-          if (discoveryFilters.area !== 'All nearby' && family.area !== discoveryFilters.area) return false;
+          if (!isWithinRadius(draftProfile.homeLocation, family.homeLocation, discoveryFilters.radiusKm)) return false;
           if (discoveryFilters.availability !== 'Any' && !family.availability.includes(discoveryFilters.availability)) return false;
           if (discoveryFilters.familyStage === 'expecting' && !isExpectingFamily(family)) return false;
           if (
@@ -140,6 +151,13 @@ export default function DiscoverScreen() {
           return true;
         })
         .sort((left, right) => {
+          const leftDistance = left.distanceKm ?? Number.POSITIVE_INFINITY;
+          const rightDistance = right.distanceKm ?? Number.POSITIVE_INFINITY;
+
+          if (leftDistance !== rightDistance) {
+            return leftDistance - rightDistance;
+          }
+
           const leftAgeSortValue = getFamilySortValue(draftChildren, left.family.children ?? []);
           const rightAgeSortValue = getFamilySortValue(draftChildren, right.family.children ?? []);
           const leftHasAgeFit = Number.isFinite(leftAgeSortValue);
@@ -202,13 +220,13 @@ export default function DiscoverScreen() {
   );
 
   const familyFilterCount =
-    (discoveryFilters.area === 'All nearby' ? 0 : 1) +
+    (discoveryFilters.radiusKm === DEFAULT_DISCOVERY_RADIUS_KM ? 0 : 1) +
     (discoveryFilters.availability === 'Any' ? 0 : 1) +
     (discoveryFilters.familyStage === 'expecting' ? 1 : 0) +
     (showChildDiscoveryControls ? discoveryFilters.selectedInterests.length : 0) +
     (showChildDiscoveryControls && similarAgeOnly ? 1 : 0);
   const publicEventFilterCount =
-    (publicEventFilters.area === 'All nearby' ? 0 : 1) +
+    (publicEventFilters.radiusKm === DEFAULT_DISCOVERY_RADIUS_KM ? 0 : 1) +
     (publicEventFilters.audience === ANY_PUBLIC_EVENT_AUDIENCE ? 0 : 1) +
     (publicEventFilters.audience === 'children' && publicEventFilters.ageRange !== ANY_PUBLIC_EVENT_AGE ? 1 : 0) +
     publicEventFilters.selectedActivityTags.length;
@@ -265,7 +283,7 @@ export default function DiscoverScreen() {
         <View style={styles.filters}>
           {mode === 'families' ? (
             <>
-              <Chip label={discoveryFilters.area} />
+              <Chip label={formatRadiusLabel(discoveryFilters.radiusKm)} />
               <Chip label={discoveryFilters.availability} />
               {discoveryFilters.familyStage === 'expecting' ? <Chip label="Expecting" /> : null}
               {showChildDiscoveryControls && similarAgeOnly ? <Chip label="Similar age" /> : null}
@@ -276,7 +294,7 @@ export default function DiscoverScreen() {
             </>
           ) : (
             <>
-              <Chip label={publicEventFilters.area} />
+              <Chip label={formatRadiusLabel(publicEventFilters.radiusKm)} />
               {publicEventFilters.audience !== ANY_PUBLIC_EVENT_AUDIENCE ? (
                 <Chip label={publicEventFilters.audience === 'expecting' ? 'Expecting parents' : 'Families with children'} />
               ) : null}
@@ -303,15 +321,15 @@ export default function DiscoverScreen() {
             {mode === 'families' ? (
               <>
                 <View style={styles.filterGroup}>
-                  <Text style={styles.groupLabel}>Area</Text>
+                  <Text style={styles.groupLabel}>Distance</Text>
                   <View style={styles.filters}>
-                    <SelectableChip
-                      label="All nearby"
-                      selected={discoveryFilters.area === 'All nearby'}
-                      onPress={() => setDiscoveryArea('All nearby')}
-                    />
-                    {areaOptions.map((area) => (
-                      <SelectableChip key={area} label={area} selected={discoveryFilters.area === area} onPress={() => setDiscoveryArea(area)} />
+                    {distanceRadiusOptions.map((radiusKm) => (
+                      <SelectableChip
+                        key={radiusKm === null ? 'any-distance' : `${radiusKm}-km`}
+                        label={formatRadiusLabel(radiusKm)}
+                        selected={discoveryFilters.radiusKm === radiusKm}
+                        onPress={() => setDiscoveryRadius(radiusKm)}
+                      />
                     ))}
                   </View>
                 </View>
@@ -371,15 +389,15 @@ export default function DiscoverScreen() {
             ) : (
               <>
                 <View style={styles.filterGroup}>
-                  <Text style={styles.groupLabel}>Area</Text>
+                  <Text style={styles.groupLabel}>Distance</Text>
                   <View style={styles.filters}>
-                    <SelectableChip
-                      label="All nearby"
-                      selected={publicEventFilters.area === 'All nearby'}
-                      onPress={() => setPublicEventArea('All nearby')}
-                    />
-                    {areaOptions.map((area) => (
-                      <SelectableChip key={area} label={area} selected={publicEventFilters.area === area} onPress={() => setPublicEventArea(area)} />
+                    {distanceRadiusOptions.map((radiusKm) => (
+                      <SelectableChip
+                        key={radiusKm === null ? 'any-event-distance' : `event-${radiusKm}-km`}
+                        label={formatRadiusLabel(radiusKm)}
+                        selected={publicEventFilters.radiusKm === radiusKm}
+                        onPress={() => setPublicEventRadius(radiusKm)}
+                      />
                     ))}
                   </View>
                 </View>
@@ -447,7 +465,7 @@ export default function DiscoverScreen() {
         visibleFamilies.length === 0 ? (
           <EmptyState
             title="No families match these filters"
-            body="Try broadening the family stage, area, or availability so the prototype can show more nearby parents again."
+            body="Try broadening the family stage, distance, or availability so the prototype can show more nearby parents again."
             actionLabel="Reset filters"
             onAction={resetDiscoveryFilters}
           />
@@ -460,10 +478,10 @@ export default function DiscoverScreen() {
             return (
               <FamilyCard
                 key={family.id}
-                area={family.area}
                 availability={family.availability}
                 avatarUrl={publicParent?.avatarUrl ?? ''}
                 children={family.children ?? []}
+                distanceLabel={getFamilyDistanceLabel(draftProfile, family)}
                 expecting={family.expecting}
                 familyVibe={family.familyVibe}
                 fitChips={getFamilyFitChips(draftProfile, family)}
@@ -483,7 +501,7 @@ export default function DiscoverScreen() {
       ) : visiblePublicEvents.length === 0 ? (
         <EmptyState
           title="No public events match these filters"
-          body="Try broadening the area or audience to find more open events nearby."
+          body="Try broadening the distance or audience to find more open events nearby."
           actionLabel="Reset filters"
           onAction={resetPublicEventFilters}
         />
@@ -502,7 +520,6 @@ export default function DiscoverScreen() {
             <PublicEventCard
               key={groupPlayDate.id}
               audienceLabel={getGroupAudienceLabel(groupPlayDate)}
-              area={groupPlayDate.area}
               attendeeCount={groupPlayDate.attendeeFamilyIds.length}
               capacity={groupPlayDate.capacity}
               ctaDisabled={isRequestedByThisParent || isRequestedByLinkedParent || isFull}
@@ -516,6 +533,7 @@ export default function DiscoverScreen() {
                       : 'Request to join'
               }
               dateLabel={groupPlayDate.dateLabel}
+              distanceLabel={getGroupDistanceLabel(draftProfile, groupPlayDate)}
               hostAvatarUrl={host?.avatarUrl}
               hostName={host?.parentName ?? 'Nearby host'}
               locationName={groupPlayDate.locationName}

@@ -5,10 +5,11 @@ import { SubscreenHeader } from '@/components/navigation/SubscreenHeader';
 import { Screen } from '@/components/ui/Screen';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { LocationField } from '@/components/ui/LocationField';
 import { SelectableChip } from '@/components/ui/SelectableChip';
 import { TextField } from '@/components/ui/TextField';
+import { stockholmLocationPresets } from '@/constants/locations';
 import {
-  areaOptions,
   expectingActivityOptions,
   groupActivityOptions,
   groupAgeRangeOptions,
@@ -21,17 +22,19 @@ import {
   getLinkedParentMatchedFamilyIds,
   getPrimaryParent,
   type GroupPlayDateAudience,
+  type SavedLocation,
   useAppStore,
   type GroupPlayDateVisibility,
 } from '@/store/app-store';
 import { getMatchedFamilies } from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
+import { getPrivateLocationLabel } from '@/utils/location';
 
 type GroupFormState = {
   title: string;
   locationName: string;
-  area: string;
+  location: SavedLocation | null;
   dateLabel: string;
   timeLabel: string;
   ageRange: string;
@@ -47,10 +50,10 @@ type GroupFormState = {
 const toggle = (values: string[], value: string) =>
   values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value];
 
-const createInitialForm = (defaultArea: string, audience: GroupPlayDateAudience): GroupFormState => ({
+const createInitialForm = (defaultLocation: SavedLocation | null, audience: GroupPlayDateAudience): GroupFormState => ({
   title: '',
   locationName: '',
-  area: defaultArea,
+  location: defaultLocation,
   dateLabel: '',
   timeLabel: '',
   ageRange: '',
@@ -73,7 +76,7 @@ export default function CreateGroupScreen() {
   const canHostChildrenEvents = canParticipateInAudience(draftProfile, 'children');
   const canHostExpectingEvents = canParticipateInAudience(draftProfile, 'expecting');
   const defaultAudience = canHostChildrenEvents ? 'children' : 'expecting';
-  const [form, setForm] = useState<GroupFormState>(() => createInitialForm(draftProfile.area, defaultAudience));
+  const [form, setForm] = useState<GroupFormState>(() => createInitialForm(draftProfile.homeLocation, defaultAudience));
   const canHostSelectedAudience = canParticipateInAudience(draftProfile, form.audience);
   const matchedFamilyIds = [
     ...new Set([
@@ -97,7 +100,7 @@ export default function CreateGroupScreen() {
   const hasRequiredFields =
     form.title.trim().length > 0 &&
     form.locationName.trim().length > 0 &&
-    form.area.trim().length > 0 &&
+    Boolean(form.location) &&
     form.dateLabel.trim().length > 0 &&
     form.timeLabel.trim().length > 0 &&
     (form.audience === 'expecting' || form.ageRange.trim().length > 0) &&
@@ -112,13 +115,13 @@ export default function CreateGroupScreen() {
     (form.visibility === 'public' || form.invitedFamilyIds.length > 0);
 
   const submit = () => {
-    if (!canSubmit) {
+    if (!canSubmit || !form.location) {
       return;
     }
 
     const id = createGroupPlayDate({
       title: form.title.trim(),
-      area: form.area,
+      location: form.location,
       locationName: form.locationName.trim(),
       dateLabel: form.dateLabel.trim(),
       timeLabel: form.timeLabel.trim(),
@@ -226,19 +229,21 @@ export default function CreateGroupScreen() {
           value={form.locationName}
           onChangeText={(value) => setForm((current) => ({ ...current, locationName: value }))}
         />
-        <View style={styles.section}>
-          <Text style={styles.label}>Area</Text>
-          <View style={styles.filters}>
-            {areaOptions.map((area) => (
-              <SelectableChip
-                key={area}
-                label={area}
-                selected={form.area === area}
-                onPress={() => setForm((current) => ({ ...current, area }))}
-              />
-            ))}
-          </View>
-        </View>
+        <LocationField
+          helperText={
+            form.location
+              ? 'Used to sort and filter nearby events.'
+              : 'Choose the address for this meetup so discover can sort and filter it correctly.'
+          }
+          label="Event address"
+          onChange={(location) => setForm((current) => ({ ...current, location }))}
+          placeholder="Search by street or address"
+          suggestionMetaFormatter={() => 'Used for event distance matching'}
+          suggestionTitleFormatter={getPrivateLocationLabel}
+          suggestions={stockholmLocationPresets}
+          valueFormatter={getPrivateLocationLabel}
+          value={form.location}
+        />
         <View style={styles.formRow}>
           <View style={styles.flex}>
             <TextField

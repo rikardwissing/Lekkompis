@@ -17,6 +17,7 @@ import {
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { formatAgeLabelFromBirthDate, formatDateOnly, formatDueMonthLabel } from '@/utils/birthdays';
+import { getPrivateLocationLabel } from '@/utils/location';
 
 export default function ProfileScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -55,7 +56,8 @@ export default function ProfileScreen() {
           <Avatar name={activeParent?.firstName ?? 'Parent'} imageUrl={activeParent?.avatarUrl} size={72} />
           <View style={styles.identityText}>
             <Text style={styles.name}>{activeParent?.firstName ?? 'Parent'}</Text>
-            <Text style={styles.meta}>{draftProfile.area}</Text>
+            <Text style={styles.meta}>{getPrivateLocationLabel(draftProfile.homeLocation)}</Text>
+            <Text style={styles.meta}>Home address stays private</Text>
             <Text style={styles.meta}>
               {activeParent?.role === 'primary' ? 'Primary parent session' : 'Linked co-parent session'}
             </Text>

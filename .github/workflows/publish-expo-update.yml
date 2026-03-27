@@ -99,11 +99,17 @@ jobs:
         id: expo_update_link
         run: |
           UPDATE_URL="$(rg -o 'https://expo.dev/accounts/[^[:space:]]+' eas-update.log | head -n 1)"
+          PROJECT_ID="$(rg -o \"projectId:\\s*'[^']+'\" app.config.ts | sed -E \"s/.*'([^']+)'.*/\\1/\" | head -n 1)"
           if [ -z "${UPDATE_URL}" ]; then
             UPDATE_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           fi
 
           echo "update_url=${UPDATE_URL}" >> "$GITHUB_OUTPUT"
+          if [ -n "${PROJECT_ID}" ]; then
+            echo "expo_go_url=exp://u.expo.dev/${PROJECT_ID}?channel-name=pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "expo_go_url=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Comment PR with Expo update link
         uses: actions/github-script@v8
@@ -117,6 +123,7 @@ jobs:
             - **Channel:** \`pr-${{ github.event.pull_request.number }}\`
             - **Commit:** \`${{ github.sha }}\`
             - **Update link:** ${{ steps.expo_update_link.outputs.update_url }}
+            - **Expo Go link:** ${{ steps.expo_update_link.outputs.expo_go_url || 'Unavailable (project id not found)' }}
 
             _This comment is updated on new commits to this PR._`;
 

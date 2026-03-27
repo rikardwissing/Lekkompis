@@ -101,11 +101,11 @@ jobs:
           github-token: ${{ github.token }}
           script: |
             const marker = '<!-- expo-preview-link -->';
+            const expoGoLink = `${{ steps.preview.outputs.link }}`.replace(/^https:\/\//, 'exp://');
             const body = `${marker}
             ## Expo Preview
 
-            - **Open in Expo Go (iOS):** [${{ steps.preview.outputs.iosLink }}](${{ steps.preview.outputs.iosLink }})
-            - **Open in Expo Go (Android):** [${{ steps.preview.outputs.androidLink }}](${{ steps.preview.outputs.androidLink }})
+            - **Open in Expo Go:** [${expoGoLink}](${expoGoLink})
             - **Expo dashboard link:** [${{ steps.preview.outputs.link }}](${{ steps.preview.outputs.link }})
             - **QR code:** ${{ steps.preview.outputs.qr }}
             `;

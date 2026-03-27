@@ -3,6 +3,7 @@ import { Href, router } from 'expo-router';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
+import { glass } from '@/theme/glass';
 
 type SubscreenHeaderProps = {
   fallbackHref: Href;
@@ -61,9 +62,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    ...glass.panel,
     alignItems: 'center',
     justifyContent: 'center',
   },

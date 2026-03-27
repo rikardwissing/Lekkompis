@@ -67,8 +67,9 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.textMuted,
         tabBarLabelStyle: styles.tabLabel,
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
+          backgroundColor: 'rgba(12, 24, 42, 0.72)',
+          borderTopColor: 'rgba(255, 255, 255, 0.12)',
+          position: 'absolute',
         },
       }}
     >
@@ -127,7 +128,7 @@ const styles = StyleSheet.create({
   },
   tabBadge: {
     backgroundColor: colors.primary,
-    color: colors.surface,
+    color: '#062742',
     fontSize: 11,
     fontWeight: '700',
   },

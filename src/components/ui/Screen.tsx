@@ -1,7 +1,6 @@
 import { PropsWithChildren, ReactNode } from 'react';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { Animated, KeyboardAvoidingView, Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
-import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 
 type ScreenProps = PropsWithChildren<{
@@ -57,7 +56,7 @@ export function Screen({ children, scroll = false, header, contentStyle, edges, 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
   },
   fill: {
     flex: 1,

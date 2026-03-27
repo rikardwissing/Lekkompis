@@ -5,6 +5,7 @@ import { getActiveParent, useAppStore } from '@/store/app-store';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
+import { glass } from '@/theme/glass';
 
 type MainAppHeaderProps = {
   showProfileAction?: boolean;
@@ -62,10 +63,8 @@ const styles = StyleSheet.create({
   },
   avatarAction: {
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...glass.panel,
     padding: spacing.xs,
-    backgroundColor: colors.surface,
   },
   sideSpacer: {
     width: 42,

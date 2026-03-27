@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text } from 'react-native';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
+import { glass } from '@/theme/glass';
 
 export function SelectableChip({
   label,
@@ -32,12 +33,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   selected: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primarySoft,
     borderColor: colors.primary,
   },
   unselected: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+    ...glass.panelMuted,
   },
   text: {
     fontSize: 13,
@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
     opacity: 0.86,
   },
   selectedText: {
-    color: colors.surface,
+    color: colors.text,
   },
   unselectedText: {
     color: colors.text,

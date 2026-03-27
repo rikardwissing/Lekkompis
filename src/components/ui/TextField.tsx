@@ -2,6 +2,7 @@ import { KeyboardTypeOptions, StyleSheet, Text, TextInput, View } from 'react-na
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
+import { glass } from '@/theme/glass';
 
 export function TextField({
   label,
@@ -46,9 +47,7 @@ const styles = StyleSheet.create({
   input: {
     minHeight: 52,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    ...glass.panel,
     paddingHorizontal: spacing.md,
     color: colors.text,
     fontSize: 16,

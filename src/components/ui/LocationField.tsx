@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
+import { glass } from '@/theme/glass';
 import {
   getPrivateLocationLabel,
   getPublicLocationLabel,
@@ -105,9 +106,7 @@ const styles = StyleSheet.create({
   input: {
     minHeight: 52,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    ...glass.panel,
     paddingHorizontal: spacing.md,
     color: colors.text,
     fontSize: 16,
@@ -117,9 +116,7 @@ const styles = StyleSheet.create({
   },
   suggestionCard: {
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    ...glass.panel,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     gap: spacing.xs,

@@ -36,7 +36,7 @@ export function DevicePreview({ children }: PropsWithChildren) {
 const styles = StyleSheet.create({
   outer: {
     flex: 1,
-    backgroundColor: '#E8E3DA',
+    backgroundColor: '#0A1220',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
   frame: {
     borderRadius: 42,
     padding: 10,
-    backgroundColor: '#121212',
+    backgroundColor: '#06090F',
     shadowColor: 'rgba(0,0,0,0.18)',
     shadowOffset: { width: 0, height: 24 },
     shadowOpacity: 1,

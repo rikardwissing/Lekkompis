@@ -672,14 +672,6 @@ export default function DiscoverScreen() {
           )}
         </View>
 
-        {mode === 'families' && deckParents.length > 0 ? (
-          <View pointerEvents="box-none" style={styles.bottomOverlay}>
-            <View style={styles.dragHint}>
-              <Ionicons color={colors.surface} name="swap-horizontal" size={16} />
-              <Text style={styles.dragHintText}>Swipe cards left or right to choose</Text>
-            </View>
-          </View>
-        ) : null}
       </View>
 
       <DiscoveryBottomSheet
@@ -923,32 +915,6 @@ const styles = StyleSheet.create({
   deckArea: {
     flex: 1,
     minHeight: 0,
-  },
-  bottomOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: spacing.xl,
-    zIndex: 10,
-    paddingHorizontal: spacing.xl,
-  },
-  dragHint: {
-    alignSelf: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.24)',
-    backgroundColor: 'rgba(18,24,20,0.58)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  dragHintText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.surface,
   },
   eventsScrollContent: {
     paddingTop: 88,

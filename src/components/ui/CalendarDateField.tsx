@@ -156,12 +156,18 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<PickerMode>('days');
   const [monthCursor, setMonthCursor] = useState<Date>(() => selectedDate ?? new Date());
+  const [contentHeights, setContentHeights] = useState<Record<PickerMode, number>>({
+    days: 320,
+    months: 220,
+    years: 220,
+  });
 
   const monthDays = useMemo(() => getMonthDays(monthCursor, normalizedFirstDay), [monthCursor, normalizedFirstDay]);
   const yearRange = useMemo(() => getYearRange(monthCursor.getFullYear()), [monthCursor]);
 
   const modeAnim = useRef(new Animated.Value(1)).current;
   const panX = useRef(new Animated.Value(0)).current;
+  const contentHeight = useRef(new Animated.Value(contentHeights.days)).current;
 
   useEffect(() => {
     modeAnim.setValue(0);
@@ -172,6 +178,31 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
       bounciness: 6,
     }).start();
   }, [mode, modeAnim]);
+
+
+  useEffect(() => {
+    Animated.timing(contentHeight, {
+      toValue: contentHeights[mode],
+      duration: 220,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [contentHeight, contentHeights, mode]);
+
+  const measureContentHeight = (targetMode: PickerMode, measuredHeight: number) => {
+    const roundedHeight = Math.ceil(measuredHeight);
+
+    setContentHeights((current) => {
+      if (Math.abs(current[targetMode] - roundedHeight) < 2) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [targetMode]: roundedHeight,
+      };
+    });
+  };
 
   const openPicker = () => {
     setMonthCursor(selectedDate ?? new Date());
@@ -274,9 +305,10 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
               </Pressable>
             </View>
 
-            <Animated.View {...panResponder.panHandlers} style={[styles.contentShell, modeTransitionStyle]}>
+            <Animated.View style={[styles.heightShell, { height: contentHeight }]}>
+              <Animated.View {...panResponder.panHandlers} style={[styles.contentShell, modeTransitionStyle]}>
               {mode === 'days' ? (
-                <>
+                <View onLayout={(event) => measureContentHeight('days', event.nativeEvent.layout.height)}>
                   <View style={styles.weekHeader}>
                     {weekdayLabels.map((dayLabel) => (
                       <Text key={dayLabel} style={styles.weekday}>
@@ -312,11 +344,11 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
                       );
                     })}
                   </View>
-                </>
+                </View>
               ) : null}
 
               {mode === 'months' ? (
-                <View style={styles.selectionGrid}>
+                <View onLayout={(event) => measureContentHeight('months', event.nativeEvent.layout.height)} style={styles.selectionGrid}>
                   {MONTHS.map((monthLabel, index) => {
                     const isSelected = monthCursor.getMonth() === index;
 
@@ -338,7 +370,7 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
               ) : null}
 
               {mode === 'years' ? (
-                <View style={styles.selectionGrid}>
+                <View onLayout={(event) => measureContentHeight('years', event.nativeEvent.layout.height)} style={styles.selectionGrid}>
                   {yearRange.map((year) => {
                     const isSelected = year === monthCursor.getFullYear();
 
@@ -358,6 +390,7 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
                   })}
                 </View>
               ) : null}
+              </Animated.View>
             </Animated.View>
           </Pressable>
         </Pressable>
@@ -470,6 +503,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
     fontWeight: '600',
+  },
+  heightShell: {
+    overflow: 'hidden',
   },
   contentShell: {
     gap: spacing.xs,

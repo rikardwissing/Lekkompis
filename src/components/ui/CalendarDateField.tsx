@@ -101,26 +101,18 @@ const getMonthDays = (monthCursor: Date, firstDayOfWeek: number) => {
   });
 };
 
-const getYearRange = (year: number) => {
-  const startYear = Math.floor(year / 12) * 12;
-  return Array.from({ length: 12 }, (_, index) => startYear + index);
-};
-
 export function CalendarDateField({ label, placeholder = 'Pick a date', helperText, firstDayOfWeek, value, onChange }: CalendarDateFieldProps) {
   const normalizedFirstDay = useMemo(() => normalizeFirstDayOfWeek(firstDayOfWeek), [firstDayOfWeek]);
   const selectedDate = useMemo(() => parseIsoDate(value), [value]);
   const todayIso = useMemo(() => toIsoDate(new Date()), []);
   const weekdayLabels = useMemo(() => getWeekdayLabels(normalizedFirstDay), [normalizedFirstDay]);
   const [isOpen, setIsOpen] = useState(false);
-  const [showYearPicker, setShowYearPicker] = useState(false);
   const [monthCursor, setMonthCursor] = useState<Date>(() => selectedDate ?? new Date());
 
   const monthDays = useMemo(() => getMonthDays(monthCursor, normalizedFirstDay), [monthCursor, normalizedFirstDay]);
-  const years = useMemo(() => getYearRange(monthCursor.getFullYear()), [monthCursor]);
 
   const openPicker = () => {
     setMonthCursor(selectedDate ?? new Date());
-    setShowYearPicker(false);
     setIsOpen(true);
   };
 
@@ -146,94 +138,92 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
             <View style={styles.modalHeader}>
               <Pressable
                 accessibilityRole="button"
-                onPress={() =>
-                  setMonthCursor((current) =>
-                    showYearPicker
-                      ? new Date(current.getFullYear() - 12, current.getMonth(), 1)
-                      : new Date(current.getFullYear(), current.getMonth() - 1, 1)
-                  )
-                }
+                onPress={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
                 style={styles.navButton}
               >
                 <Text style={styles.navButtonText}>‹</Text>
               </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => setShowYearPicker((current) => !current)}>
-                <Text style={styles.monthLabel}>
-                  {MONTHS[monthCursor.getMonth()]} {monthCursor.getFullYear()}
-                </Text>
-              </Pressable>
+              <Text style={styles.monthLabel}>
+                {MONTHS[monthCursor.getMonth()]} {monthCursor.getFullYear()}
+              </Text>
               <Pressable
                 accessibilityRole="button"
-                onPress={() =>
-                  setMonthCursor((current) =>
-                    showYearPicker
-                      ? new Date(current.getFullYear() + 12, current.getMonth(), 1)
-                      : new Date(current.getFullYear(), current.getMonth() + 1, 1)
-                  )
-                }
+                onPress={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
                 style={styles.navButton}
               >
                 <Text style={styles.navButtonText}>›</Text>
               </Pressable>
             </View>
 
-            {showYearPicker ? (
-              <View style={styles.yearGrid}>
-                {years.map((year) => {
-                  const isSelected = year === monthCursor.getFullYear();
-
-                  return (
-                    <Pressable
-                      key={year}
-                      accessibilityRole="button"
-                      onPress={() => {
-                        setMonthCursor((current) => new Date(year, current.getMonth(), 1));
-                        setShowYearPicker(false);
-                      }}
-                      style={({ pressed }) => [styles.yearItem, isSelected ? styles.yearSelected : null, pressed ? styles.pressed : null]}
-                    >
-                      <Text style={isSelected ? styles.yearTextSelected : styles.yearText}>{year}</Text>
-                    </Pressable>
-                  );
-                })}
+            <View style={styles.yearRow}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setMonthCursor((current) => new Date(current.getFullYear() - 5, current.getMonth(), 1))}
+                style={styles.yearShiftButton}
+              >
+                <Text style={styles.yearShiftLabel}>−5y</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setMonthCursor((current) => new Date(current.getFullYear() - 1, current.getMonth(), 1))}
+                style={styles.yearShiftButton}
+              >
+                <Text style={styles.yearShiftLabel}>−1y</Text>
+              </Pressable>
+              <View style={styles.yearCurrentPill}>
+                <Text style={styles.yearCurrent}>{monthCursor.getFullYear()}</Text>
               </View>
-            ) : (
-              <>
-                <View style={styles.weekHeader}>
-                  {weekdayLabels.map((dayLabel) => (
-                    <Text key={dayLabel} style={styles.weekday}>
-                      {dayLabel}
-                    </Text>
-                  ))}
-                </View>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setMonthCursor((current) => new Date(current.getFullYear() + 1, current.getMonth(), 1))}
+                style={styles.yearShiftButton}
+              >
+                <Text style={styles.yearShiftLabel}>+1y</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setMonthCursor((current) => new Date(current.getFullYear() + 5, current.getMonth(), 1))}
+                style={styles.yearShiftButton}
+              >
+                <Text style={styles.yearShiftLabel}>+5y</Text>
+              </Pressable>
+            </View>
 
-                <View style={styles.dayGrid}>
-                  {monthDays.map((date, index) => {
-                    if (!date) {
-                      return <View key={`empty-${index}`} style={styles.emptyDay} />;
-                    }
+            <View style={styles.weekHeader}>
+              {weekdayLabels.map((dayLabel) => (
+                <Text key={dayLabel} style={styles.weekday}>
+                  {dayLabel}
+                </Text>
+              ))}
+            </View>
 
-                    const dateIso = toIsoDate(date);
-                    const isSelected = dateIso === value;
-                    const isToday = dateIso === todayIso;
+            <View style={styles.dayGrid}>
+              {monthDays.map((date, index) => {
+                if (!date) {
+                  return <View key={`empty-${index}`} style={styles.emptyDay} />;
+                }
 
-                    return (
-                      <Pressable
-                        key={dateIso}
-                        accessibilityRole="button"
-                        onPress={() => {
-                          onChange(dateIso);
-                          setIsOpen(false);
-                        }}
-                        style={({ pressed }) => [styles.day, isSelected ? styles.daySelected : null, isToday ? styles.dayToday : null, pressed ? styles.pressed : null]}
-                      >
-                        <Text style={isSelected ? styles.dayTextSelected : styles.dayText}>{date.getDate()}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </>
-            )}
+                const dateIso = toIsoDate(date);
+                const isSelected = dateIso === value;
+                const isToday = dateIso === todayIso;
+
+                return (
+                  <Pressable
+                    key={dateIso}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      onChange(dateIso);
+                      setIsOpen(false);
+                    }}
+                    style={({ pressed }) => [styles.day, isSelected ? styles.daySelected : null, isToday ? styles.dayToday : null, pressed ? styles.pressed : null]}
+                  >
+                    <View style={styles.dayInner}>
+                      <Text style={isSelected ? styles.dayTextSelected : styles.dayText}>{date.getDate()}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -269,7 +259,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     gap: spacing.md,
   },
   value: {
@@ -335,6 +325,41 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: colors.text,
   },
+  yearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  yearShiftButton: {
+    minHeight: 30,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  yearShiftLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  yearCurrentPill: {
+    minHeight: 30,
+    minWidth: 74,
+    borderRadius: 999,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  yearCurrent: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.primary,
+  },
   weekHeader: {
     flexDirection: 'row',
     marginBottom: spacing.xs,
@@ -372,43 +397,26 @@ const styles = StyleSheet.create({
   dayToday: {
     borderColor: colors.primary,
   },
+  dayInner: {
+    minWidth: 30,
+    minHeight: 30,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   dayText: {
     fontSize: 14,
+    lineHeight: 16,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
     color: colors.text,
     fontWeight: '600',
   },
   dayTextSelected: {
     fontSize: 14,
-    color: colors.background,
-    fontWeight: '700',
-  },
-  yearGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    rowGap: spacing.sm,
-    columnGap: spacing.sm,
-  },
-  yearItem: {
-    width: '31%',
-    minHeight: 44,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  yearSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  yearText: {
-    fontSize: 14,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  yearTextSelected: {
-    fontSize: 14,
+    lineHeight: 16,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
     color: colors.background,
     fontWeight: '700',
   },

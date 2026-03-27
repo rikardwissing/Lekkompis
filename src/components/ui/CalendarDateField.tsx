@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
@@ -17,6 +17,7 @@ type PickerMode = 'days' | 'months' | 'years';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const SWIPE_THRESHOLD = 42;
 
 const toIsoDate = (date: Date) => {
   const year = date.getFullYear();
@@ -91,8 +92,9 @@ const getMonthDays = (monthCursor: Date, firstDayOfWeek: number) => {
   const firstDay = new Date(year, month, 1);
   const offset = (firstDay.getDay() - firstDayOfWeek + 7) % 7;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7;
 
-  return Array.from({ length: 42 }, (_, index) => {
+  return Array.from({ length: totalCells }, (_, index) => {
     const dayNumber = index - offset + 1;
 
     if (dayNumber < 1 || dayNumber > daysInMonth) {
@@ -121,17 +123,54 @@ const getModeLabel = (mode: PickerMode, monthCursor: Date) => {
   return `${years[0]}-${years[years.length - 1]}`;
 };
 
+const getNextMode = (mode: PickerMode): PickerMode => {
+  if (mode === 'days') {
+    return 'months';
+  }
+
+  if (mode === 'months') {
+    return 'years';
+  }
+
+  return 'days';
+};
+
+const moveCursor = (current: Date, mode: PickerMode, direction: -1 | 1) => {
+  if (mode === 'days') {
+    return new Date(current.getFullYear(), current.getMonth() + direction, 1);
+  }
+
+  if (mode === 'months') {
+    return new Date(current.getFullYear() + direction, current.getMonth(), 1);
+  }
+
+  return new Date(current.getFullYear() + direction * 12, current.getMonth(), 1);
+};
+
 export function CalendarDateField({ label, placeholder = 'Pick a date', helperText, firstDayOfWeek, value, onChange }: CalendarDateFieldProps) {
   const normalizedFirstDay = useMemo(() => normalizeFirstDayOfWeek(firstDayOfWeek), [firstDayOfWeek]);
   const selectedDate = useMemo(() => parseIsoDate(value), [value]);
   const todayIso = useMemo(() => toIsoDate(new Date()), []);
   const weekdayLabels = useMemo(() => getWeekdayLabels(normalizedFirstDay), [normalizedFirstDay]);
+
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<PickerMode>('days');
   const [monthCursor, setMonthCursor] = useState<Date>(() => selectedDate ?? new Date());
 
   const monthDays = useMemo(() => getMonthDays(monthCursor, normalizedFirstDay), [monthCursor, normalizedFirstDay]);
   const yearRange = useMemo(() => getYearRange(monthCursor.getFullYear()), [monthCursor]);
+
+  const modeAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    modeAnim.setValue(0);
+    Animated.spring(modeAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 6,
+    }).start();
+  }, [mode, modeAnim]);
 
   const openPicker = () => {
     setMonthCursor(selectedDate ?? new Date());
@@ -140,17 +179,38 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
   };
 
   const advance = (direction: -1 | 1) => {
-    setMonthCursor((current) => {
-      if (mode === 'days') {
-        return new Date(current.getFullYear(), current.getMonth() + direction, 1);
-      }
+    setMonthCursor((current) => moveCursor(current, mode, direction));
+  };
 
-      if (mode === 'months') {
-        return new Date(current.getFullYear() + direction, current.getMonth(), 1);
-      }
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10,
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx > SWIPE_THRESHOLD) {
+            advance(-1);
+            return;
+          }
 
-      return new Date(current.getFullYear() + direction * 12, current.getMonth(), 1);
-    });
+          if (gestureState.dx < -SWIPE_THRESHOLD) {
+            advance(1);
+          }
+        },
+      }),
+    [mode]
+  );
+
+  const modeTransitionStyle = {
+    opacity: modeAnim,
+    transform: [
+      {
+        scale: modeAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.95, 1],
+        }),
+      },
+    ],
   };
 
   return (
@@ -176,102 +236,100 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
               <Pressable accessibilityRole="button" onPress={() => advance(-1)} style={styles.navButton}>
                 <Text style={styles.navButtonText}>‹</Text>
               </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setMode((current) => (current === 'days' ? 'months' : current === 'months' ? 'years' : 'days'))}
-                style={styles.headerCenter}
-              >
+              <Pressable accessibilityRole="button" onPress={() => setMode((current) => getNextMode(current))} style={styles.headerCenter}>
                 <Text style={styles.monthLabel}>{getModeLabel(mode, monthCursor)}</Text>
-                <Text style={styles.modeHint}>{mode === 'days' ? 'Month & year' : mode === 'months' ? 'Pick month' : 'Pick year'}</Text>
+                <Text style={styles.modeHint}>{mode === 'days' ? 'Swipe for months' : mode === 'months' ? 'Swipe for years' : 'Swipe for year ranges'}</Text>
               </Pressable>
               <Pressable accessibilityRole="button" onPress={() => advance(1)} style={styles.navButton}>
                 <Text style={styles.navButtonText}>›</Text>
               </Pressable>
             </View>
 
-            {mode === 'days' ? (
-              <>
-                <View style={styles.weekHeader}>
-                  {weekdayLabels.map((dayLabel) => (
-                    <Text key={dayLabel} style={styles.weekday}>
-                      {dayLabel}
-                    </Text>
-                  ))}
-                </View>
+            <Animated.View {...panResponder.panHandlers} style={[styles.contentShell, modeTransitionStyle]}>
+              {mode === 'days' ? (
+                <>
+                  <View style={styles.weekHeader}>
+                    {weekdayLabels.map((dayLabel) => (
+                      <Text key={dayLabel} style={styles.weekday}>
+                        {dayLabel}
+                      </Text>
+                    ))}
+                  </View>
 
-                <View style={styles.dayGrid}>
-                  {monthDays.map((date, index) => {
-                    if (!date) {
-                      return <View key={`empty-${index}`} style={styles.emptyDay} />;
-                    }
+                  <View style={styles.dayGrid}>
+                    {monthDays.map((date, index) => {
+                      if (!date) {
+                        return <View key={`empty-${index}`} style={styles.emptyDay} />;
+                      }
 
-                    const dateIso = toIsoDate(date);
-                    const isSelected = dateIso === value;
-                    const isToday = dateIso === todayIso;
+                      const dateIso = toIsoDate(date);
+                      const isSelected = dateIso === value;
+                      const isToday = dateIso === todayIso;
+
+                      return (
+                        <Pressable
+                          key={dateIso}
+                          accessibilityRole="button"
+                          onPress={() => {
+                            onChange(dateIso);
+                            setIsOpen(false);
+                          }}
+                          style={({ pressed }) => [styles.day, pressed ? styles.pressed : null]}
+                        >
+                          <View style={[styles.dayInner, isSelected ? styles.dayInnerSelected : null, isToday ? styles.dayInnerToday : null]}>
+                            <Text style={isSelected ? styles.dayTextSelected : styles.dayText}>{date.getDate()}</Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : null}
+
+              {mode === 'months' ? (
+                <View style={styles.selectionGrid}>
+                  {MONTHS.map((monthLabel, index) => {
+                    const isSelected = monthCursor.getMonth() === index;
 
                     return (
                       <Pressable
-                        key={dateIso}
+                        key={monthLabel}
                         accessibilityRole="button"
                         onPress={() => {
-                          onChange(dateIso);
-                          setIsOpen(false);
+                          setMonthCursor((current) => new Date(current.getFullYear(), index, 1));
+                          setMode('days');
                         }}
-                        style={({ pressed }) => [styles.day, pressed ? styles.pressed : null]}
+                        style={({ pressed }) => [styles.selectionItem, isSelected ? styles.selectionItemSelected : null, pressed ? styles.pressed : null]}
                       >
-                        <View style={[styles.dayInner, isSelected ? styles.dayInnerSelected : null, isToday ? styles.dayInnerToday : null]}>
-                          <Text style={isSelected ? styles.dayTextSelected : styles.dayText}>{date.getDate()}</Text>
-                        </View>
+                        <Text style={isSelected ? styles.selectionTextSelected : styles.selectionText}>{monthLabel}</Text>
                       </Pressable>
                     );
                   })}
                 </View>
-              </>
-            ) : null}
+              ) : null}
 
-            {mode === 'months' ? (
-              <View style={styles.selectionGrid}>
-                {MONTHS.map((monthLabel, index) => {
-                  const isSelected = monthCursor.getMonth() === index;
+              {mode === 'years' ? (
+                <View style={styles.selectionGrid}>
+                  {yearRange.map((year) => {
+                    const isSelected = year === monthCursor.getFullYear();
 
-                  return (
-                    <Pressable
-                      key={monthLabel}
-                      accessibilityRole="button"
-                      onPress={() => {
-                        setMonthCursor((current) => new Date(current.getFullYear(), index, 1));
-                        setMode('days');
-                      }}
-                      style={({ pressed }) => [styles.selectionItem, isSelected ? styles.selectionItemSelected : null, pressed ? styles.pressed : null]}
-                    >
-                      <Text style={isSelected ? styles.selectionTextSelected : styles.selectionText}>{monthLabel}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : null}
-
-            {mode === 'years' ? (
-              <View style={styles.selectionGrid}>
-                {yearRange.map((year) => {
-                  const isSelected = year === monthCursor.getFullYear();
-
-                  return (
-                    <Pressable
-                      key={year}
-                      accessibilityRole="button"
-                      onPress={() => {
-                        setMonthCursor((current) => new Date(year, current.getMonth(), 1));
-                        setMode('days');
-                      }}
-                      style={({ pressed }) => [styles.selectionItem, isSelected ? styles.selectionItemSelected : null, pressed ? styles.pressed : null]}
-                    >
-                      <Text style={isSelected ? styles.selectionTextSelected : styles.selectionText}>{year}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : null}
+                    return (
+                      <Pressable
+                        key={year}
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setMonthCursor((current) => new Date(year, current.getMonth(), 1));
+                          setMode('days');
+                        }}
+                        style={({ pressed }) => [styles.selectionItem, isSelected ? styles.selectionItemSelected : null, pressed ? styles.pressed : null]}
+                      >
+                        <Text style={isSelected ? styles.selectionTextSelected : styles.selectionText}>{year}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </Animated.View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -383,6 +441,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
     fontWeight: '600',
+  },
+  contentShell: {
+    gap: spacing.xs,
   },
   weekHeader: {
     flexDirection: 'row',

@@ -102,12 +102,13 @@ jobs:
           script: |
             const marker = '<!-- expo-preview-link -->';
             const expoGoLink = `${{ steps.preview.outputs.link }}`.replace(/^https:\/\//, 'exp://');
+            const expoGoRedirectLink = `https://redirectmeto.com/${encodeURIComponent(expoGoLink)}`;
             const body = `${marker}
             ## Expo Preview
 
-            - **Open in Expo Go:** [${expoGoLink}](${expoGoLink})
-            - **Expo dashboard link:** [${{ steps.preview.outputs.link }}](${{ steps.preview.outputs.link }})
-            - **QR code:** ${{ steps.preview.outputs.qr }}
+            - **Open in Expo Go:** [Launch in Expo Go](${expoGoRedirectLink})
+            - **Expo dashboard:** [Open update page](${{ steps.preview.outputs.link }})
+            - **QR code:** [View QR code](${{ steps.preview.outputs.qr }})
             `;
 
             const { owner, repo } = context.repo;

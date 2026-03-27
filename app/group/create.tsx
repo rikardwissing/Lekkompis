@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { LocationField } from '@/components/ui/LocationField';
 import { SelectableChip } from '@/components/ui/SelectableChip';
 import { TextField } from '@/components/ui/TextField';
+import { CalendarDateField, formatCalendarDateLabel } from '@/components/ui/CalendarDateField';
 import { stockholmLocationPresets } from '@/constants/locations';
 import {
   expectingActivityOptions,
@@ -35,6 +36,7 @@ type GroupFormState = {
   title: string;
   locationName: string;
   location: SavedLocation | null;
+  dateIso: string;
   dateLabel: string;
   timeLabel: string;
   ageRange: string;
@@ -54,6 +56,7 @@ const createInitialForm = (defaultLocation: SavedLocation | null, audience: Grou
   title: '',
   locationName: '',
   location: defaultLocation,
+  dateIso: '',
   dateLabel: '',
   timeLabel: '',
   ageRange: '',
@@ -101,7 +104,7 @@ export default function CreateGroupScreen() {
     form.title.trim().length > 0 &&
     form.locationName.trim().length > 0 &&
     Boolean(form.location) &&
-    form.dateLabel.trim().length > 0 &&
+    form.dateIso.trim().length > 0 &&
     form.timeLabel.trim().length > 0 &&
     (form.audience === 'expecting' || form.ageRange.trim().length > 0) &&
     form.activityTags.length > 0 &&
@@ -246,11 +249,17 @@ export default function CreateGroupScreen() {
         />
         <View style={styles.formRow}>
           <View style={styles.flex}>
-            <TextField
-              label="Date label"
-              placeholder="Sun 6 Apr"
-              value={form.dateLabel}
-              onChangeText={(value) => setForm((current) => ({ ...current, dateLabel: value }))}
+            <CalendarDateField
+              label="Date"
+              placeholder="Pick a date"
+              value={form.dateIso}
+              onChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  dateIso: value,
+                  dateLabel: formatCalendarDateLabel(value),
+                }))
+              }
             />
           </View>
           <View style={styles.flex}>

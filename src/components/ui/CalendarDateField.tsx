@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
@@ -161,6 +161,7 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
   const yearRange = useMemo(() => getYearRange(monthCursor.getFullYear()), [monthCursor]);
 
   const modeAnim = useRef(new Animated.Value(1)).current;
+  const panX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     modeAnim.setValue(0);
@@ -187,15 +188,40 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gestureState) =>
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10,
+        onPanResponderMove: (_, gestureState) => {
+          panX.setValue(gestureState.dx);
+        },
         onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx > SWIPE_THRESHOLD) {
-            advance(-1);
+          if (gestureState.dx > SWIPE_THRESHOLD || gestureState.dx < -SWIPE_THRESHOLD) {
+            const direction = gestureState.dx > 0 ? 1 : -1;
+            const offset = 280;
+            const step = direction > 0 ? -1 : 1;
+
+            Animated.timing(panX, {
+              toValue: direction * offset,
+              duration: 140,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: true,
+            }).start(() => {
+              advance(step);
+              panX.setValue(-direction * offset);
+              Animated.timing(panX, {
+                toValue: 0,
+                duration: 190,
+                easing: Easing.out(Easing.cubic),
+                useNativeDriver: true,
+              }).start();
+            });
+
             return;
           }
 
-          if (gestureState.dx < -SWIPE_THRESHOLD) {
-            advance(1);
-          }
+          Animated.spring(panX, {
+            toValue: 0,
+            useNativeDriver: true,
+            speed: 18,
+            bounciness: 4,
+          }).start();
         },
       }),
     [mode]
@@ -204,6 +230,9 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
   const modeTransitionStyle = {
     opacity: modeAnim,
     transform: [
+      {
+        translateX: panX,
+      },
       {
         scale: modeAnim.interpolate({
           inputRange: [0, 1],

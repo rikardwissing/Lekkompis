@@ -69,7 +69,6 @@ import { getAllChildInterests } from '@/utils/birthdays';
 import { getDistanceKm, isWithinRadius } from '@/utils/location';
 
 type DiscoverMode = 'families' | 'events';
-type DecisionDirection = 'left' | 'right';
 type DiscoverableParentEntry = {
   family: Family;
   familyIndex: number;
@@ -99,44 +98,6 @@ function SegmentButton({
       ]}
     >
       <Text style={[styles.segmentButtonText, active ? styles.segmentButtonTextActive : null]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function DecisionButton({
-  disabled = false,
-  iconName,
-  label,
-  onPress,
-  tone = 'neutral',
-}: {
-  disabled?: boolean;
-  iconName: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-  tone?: 'neutral' | 'positive';
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.decisionButton,
-        tone === 'positive' ? styles.decisionButtonPositive : null,
-        disabled ? styles.disabled : null,
-        pressed && !disabled ? styles.pressed : null,
-      ]}
-    >
-      <Ionicons
-        color={tone === 'positive' ? colors.surface : colors.text}
-        name={iconName}
-        size={18}
-      />
-      <Text style={[styles.decisionButtonText, tone === 'positive' ? styles.decisionButtonTextPositive : null]}>
-        {label}
-      </Text>
     </Pressable>
   );
 }
@@ -391,8 +352,6 @@ export default function DiscoverScreen() {
     (publicEventFilters.audience === 'children' && publicEventFilters.ageRange !== ANY_PUBLIC_EVENT_AGE ? 1 : 0) +
     publicEventFilters.selectedActivityTags.length;
 
-  const decisionDisabled =
-    !deckParents[0] || decisionPending || showFamilyFilters || Boolean(detailParentId) || Boolean(matchOverlayParentId);
   const filterButtonDisabled = decisionPending || Boolean(detailParentId) || Boolean(matchOverlayParentId);
   const moreButtonDisabled =
     !activeParentEntry || decisionPending || showFamilyFilters || Boolean(detailParentId) || Boolean(matchOverlayParentId);
@@ -445,21 +404,6 @@ export default function DiscoverScreen() {
       setDecisionPending(false);
     },
     [likeParent, matchedParentIds, passParent]
-  );
-
-  const triggerDecision = useCallback(
-    (direction: DecisionDirection) => {
-      if (decisionDisabled || !stackRef.current) {
-        return;
-      }
-
-      const started = direction === 'right' ? stackRef.current.swipeRight() : stackRef.current.swipeLeft();
-
-      if (started) {
-        setDecisionPending(true);
-      }
-    },
-    [decisionDisabled]
   );
 
   const renderFamilyCard = useCallback(
@@ -728,25 +672,6 @@ export default function DiscoverScreen() {
           )}
         </View>
 
-        {mode === 'families' && deckParents.length > 0 ? (
-          <View pointerEvents="box-none" style={styles.bottomOverlay}>
-            <View style={styles.actionBar}>
-              <DecisionButton
-                disabled={decisionDisabled}
-                iconName="close-outline"
-                label="Not now"
-                onPress={() => triggerDecision('left')}
-              />
-              <DecisionButton
-                disabled={decisionDisabled}
-                iconName="heart"
-                label="Interested"
-                onPress={() => triggerDecision('right')}
-                tone="positive"
-              />
-            </View>
-          </View>
-        ) : null}
       </View>
 
       <DiscoveryBottomSheet
@@ -990,48 +915,6 @@ const styles = StyleSheet.create({
   deckArea: {
     flex: 1,
     minHeight: 0,
-  },
-  bottomOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: spacing.xl,
-    zIndex: 10,
-    paddingHorizontal: spacing.xl,
-  },
-  actionBar: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  decisionButton: {
-    flex: 1,
-    minHeight: 60,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  decisionButtonPositive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
-  },
-  decisionButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  decisionButtonTextPositive: {
-    color: colors.surface,
   },
   eventsScrollContent: {
     paddingTop: 88,

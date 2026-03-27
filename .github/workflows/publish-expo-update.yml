@@ -102,7 +102,8 @@ jobs:
           script: |
             const marker = '<!-- expo-preview-link -->';
             const expoGoLink = `${{ steps.preview.outputs.link }}`.replace(/^https:\/\//, 'exp://');
-            const expoGoRedirectLink = `https://www.google.com/url?url=${expoGoLink}`;
+            const pagesHost = `${context.repo.owner.toLowerCase()}.github.io`;
+            const expoGoRedirectLink = `https://${pagesHost}/${context.repo.repo}/expo-go-redirect?target=${encodeURIComponent(expoGoLink)}`;
             const body = `${marker}
             ## Expo Preview
 

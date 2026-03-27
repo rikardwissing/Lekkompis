@@ -8,11 +8,12 @@ type CalendarDateFieldProps = {
   label: string;
   placeholder?: string;
   helperText?: string;
+  firstDayOfWeek?: number;
   value: string;
   onChange: (value: string) => void;
 };
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const toIsoDate = (date: Date) => {
@@ -21,6 +22,40 @@ const toIsoDate = (date: Date) => {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
+
+const getDefaultFirstDayOfWeek = () => {
+  try {
+    const locale = Intl.DateTimeFormat().resolvedOptions().locale;
+    const intlWithLocale = Intl as Intl & { Locale?: new (value: string) => { weekInfo?: { firstDay?: number } } };
+
+    if (!intlWithLocale.Locale) {
+      return 0;
+    }
+
+    const localeInfo = new intlWithLocale.Locale(locale);
+    const weekInfoFirstDay = localeInfo.weekInfo?.firstDay;
+
+    if (typeof weekInfoFirstDay === 'number') {
+      return weekInfoFirstDay % 7;
+    }
+  } catch {
+    return 0;
+  }
+
+  return 0;
+};
+
+const normalizeFirstDayOfWeek = (value: number | undefined) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return getDefaultFirstDayOfWeek();
+  }
+
+  const normalized = Math.floor(value) % 7;
+  return normalized < 0 ? normalized + 7 : normalized;
+};
+
+const getWeekdayLabels = (firstDayOfWeek: number) =>
+  Array.from({ length: 7 }, (_, offset) => WEEKDAYS[(firstDayOfWeek + offset) % 7]);
 
 export const parseIsoDate = (value: string) => {
   const [year, month, day] = value.split('-').map((part) => Number.parseInt(part, 10));
@@ -45,15 +80,14 @@ export const formatCalendarDateLabel = (value: string) => {
     return '';
   }
 
-  const weekdayIndex = (date.getDay() + 6) % 7;
-  return `${WEEKDAYS[weekdayIndex]} ${date.getDate()} ${MONTHS[date.getMonth()]}`;
+  return `${WEEKDAYS[date.getDay()]} ${date.getDate()} ${MONTHS[date.getMonth()]}`;
 };
 
-const getMonthDays = (monthCursor: Date) => {
+const getMonthDays = (monthCursor: Date, firstDayOfWeek: number) => {
   const year = monthCursor.getFullYear();
   const month = monthCursor.getMonth();
   const firstDay = new Date(year, month, 1);
-  const offset = (firstDay.getDay() + 6) % 7;
+  const offset = (firstDay.getDay() - firstDayOfWeek + 7) % 7;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   return Array.from({ length: 42 }, (_, index) => {
@@ -67,22 +101,26 @@ const getMonthDays = (monthCursor: Date) => {
   });
 };
 
-export function CalendarDateField({
-  label,
-  placeholder = 'Pick a date',
-  helperText,
-  value,
-  onChange,
-}: CalendarDateFieldProps) {
+const getYearRange = (year: number) => {
+  const startYear = Math.floor(year / 12) * 12;
+  return Array.from({ length: 12 }, (_, index) => startYear + index);
+};
+
+export function CalendarDateField({ label, placeholder = 'Pick a date', helperText, firstDayOfWeek, value, onChange }: CalendarDateFieldProps) {
+  const normalizedFirstDay = useMemo(() => normalizeFirstDayOfWeek(firstDayOfWeek), [firstDayOfWeek]);
   const selectedDate = useMemo(() => parseIsoDate(value), [value]);
   const todayIso = useMemo(() => toIsoDate(new Date()), []);
+  const weekdayLabels = useMemo(() => getWeekdayLabels(normalizedFirstDay), [normalizedFirstDay]);
   const [isOpen, setIsOpen] = useState(false);
+  const [showYearPicker, setShowYearPicker] = useState(false);
   const [monthCursor, setMonthCursor] = useState<Date>(() => selectedDate ?? new Date());
 
-  const monthDays = useMemo(() => getMonthDays(monthCursor), [monthCursor]);
+  const monthDays = useMemo(() => getMonthDays(monthCursor, normalizedFirstDay), [monthCursor, normalizedFirstDay]);
+  const years = useMemo(() => getYearRange(monthCursor.getFullYear()), [monthCursor]);
 
   const openPicker = () => {
     setMonthCursor(selectedDate ?? new Date());
+    setShowYearPicker(false);
     setIsOpen(true);
   };
 
@@ -108,56 +146,94 @@ export function CalendarDateField({
             <View style={styles.modalHeader}>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
+                onPress={() =>
+                  setMonthCursor((current) =>
+                    showYearPicker
+                      ? new Date(current.getFullYear() - 12, current.getMonth(), 1)
+                      : new Date(current.getFullYear(), current.getMonth() - 1, 1)
+                  )
+                }
                 style={styles.navButton}
               >
                 <Text style={styles.navButtonText}>‹</Text>
               </Pressable>
-              <Text style={styles.monthLabel}>
-                {MONTHS[monthCursor.getMonth()]} {monthCursor.getFullYear()}
-              </Text>
+              <Pressable accessibilityRole="button" onPress={() => setShowYearPicker((current) => !current)}>
+                <Text style={styles.monthLabel}>
+                  {MONTHS[monthCursor.getMonth()]} {monthCursor.getFullYear()}
+                </Text>
+              </Pressable>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
+                onPress={() =>
+                  setMonthCursor((current) =>
+                    showYearPicker
+                      ? new Date(current.getFullYear() + 12, current.getMonth(), 1)
+                      : new Date(current.getFullYear(), current.getMonth() + 1, 1)
+                  )
+                }
                 style={styles.navButton}
               >
                 <Text style={styles.navButtonText}>›</Text>
               </Pressable>
             </View>
 
-            <View style={styles.weekHeader}>
-              {WEEKDAYS.map((dayLabel) => (
-                <Text key={dayLabel} style={styles.weekday}>
-                  {dayLabel}
-                </Text>
-              ))}
-            </View>
+            {showYearPicker ? (
+              <View style={styles.yearGrid}>
+                {years.map((year) => {
+                  const isSelected = year === monthCursor.getFullYear();
 
-            <View style={styles.dayGrid}>
-              {monthDays.map((date, index) => {
-                if (!date) {
-                  return <View key={`empty-${index}`} style={styles.emptyDay} />;
-                }
+                  return (
+                    <Pressable
+                      key={year}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        setMonthCursor((current) => new Date(year, current.getMonth(), 1));
+                        setShowYearPicker(false);
+                      }}
+                      style={({ pressed }) => [styles.yearItem, isSelected ? styles.yearSelected : null, pressed ? styles.pressed : null]}
+                    >
+                      <Text style={isSelected ? styles.yearTextSelected : styles.yearText}>{year}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : (
+              <>
+                <View style={styles.weekHeader}>
+                  {weekdayLabels.map((dayLabel) => (
+                    <Text key={dayLabel} style={styles.weekday}>
+                      {dayLabel}
+                    </Text>
+                  ))}
+                </View>
 
-                const dateIso = toIsoDate(date);
-                const isSelected = dateIso === value;
-                const isToday = dateIso === todayIso;
+                <View style={styles.dayGrid}>
+                  {monthDays.map((date, index) => {
+                    if (!date) {
+                      return <View key={`empty-${index}`} style={styles.emptyDay} />;
+                    }
 
-                return (
-                  <Pressable
-                    key={dateIso}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      onChange(dateIso);
-                      setIsOpen(false);
-                    }}
-                    style={({ pressed }) => [styles.day, isSelected ? styles.daySelected : null, isToday ? styles.dayToday : null, pressed ? styles.pressed : null]}
-                  >
-                    <Text style={isSelected ? styles.dayTextSelected : styles.dayText}>{date.getDate()}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+                    const dateIso = toIsoDate(date);
+                    const isSelected = dateIso === value;
+                    const isToday = dateIso === todayIso;
+
+                    return (
+                      <Pressable
+                        key={dateIso}
+                        accessibilityRole="button"
+                        onPress={() => {
+                          onChange(dateIso);
+                          setIsOpen(false);
+                        }}
+                        style={({ pressed }) => [styles.day, isSelected ? styles.daySelected : null, isToday ? styles.dayToday : null, pressed ? styles.pressed : null]}
+                      >
+                        <Text style={isSelected ? styles.dayTextSelected : styles.dayText}>{date.getDate()}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -273,24 +349,27 @@ const styles = StyleSheet.create({
   dayGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    rowGap: spacing.xs,
   },
   day: {
     width: `${100 / 7}%`,
     aspectRatio: 1,
     borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyDay: {
     width: `${100 / 7}%`,
     aspectRatio: 1,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   daySelected: {
     backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   dayToday: {
-    borderWidth: 1,
     borderColor: colors.primary,
   },
   dayText: {
@@ -299,6 +378,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   dayTextSelected: {
+    fontSize: 14,
+    color: colors.background,
+    fontWeight: '700',
+  },
+  yearGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: spacing.sm,
+    columnGap: spacing.sm,
+  },
+  yearItem: {
+    width: '31%',
+    minHeight: 44,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  yearSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  yearText: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  yearTextSelected: {
     fontSize: 14,
     color: colors.background,
     fontWeight: '700',

@@ -24,13 +24,22 @@ const parseMonthYear = (value: string) => {
   return { year, month };
 };
 
+
+const getYearRange = (year: number) => {
+  const startYear = Math.floor(year / 12) * 12;
+  return Array.from({ length: 12 }, (_, index) => startYear + index);
+};
+
 export function MonthField({ label, placeholder = 'Add due month', value, onChange }: MonthFieldProps) {
   const parsed = useMemo(() => parseMonthYear(value), [value]);
   const [isOpen, setIsOpen] = useState(false);
+  const [showYearPicker, setShowYearPicker] = useState(false);
   const [yearCursor, setYearCursor] = useState(parsed?.year ?? new Date().getFullYear());
+  const years = useMemo(() => getYearRange(yearCursor), [yearCursor]);
 
   const openPicker = () => {
     setYearCursor(parsed?.year ?? new Date().getFullYear());
+    setShowYearPicker(false);
     setIsOpen(true);
   };
 
@@ -56,44 +65,68 @@ export function MonthField({ label, placeholder = 'Add due month', value, onChan
             <View style={styles.modalHeader}>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => setYearCursor((current) => current - 1)}
+                onPress={() => setYearCursor((current) => current - 12)}
                 style={styles.navButton}
               >
                 <Text style={styles.navButtonText}>‹</Text>
               </Pressable>
-              <Text style={styles.yearLabel}>{yearCursor}</Text>
+              <Pressable accessibilityRole="button" onPress={() => setShowYearPicker((current) => !current)}>
+                <Text style={styles.yearLabel}>{yearCursor}</Text>
+              </Pressable>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => setYearCursor((current) => current + 1)}
+                onPress={() => setYearCursor((current) => current + 12)}
                 style={styles.navButton}
               >
                 <Text style={styles.navButtonText}>›</Text>
               </Pressable>
             </View>
 
-            <View style={styles.monthGrid}>
-              {MONTHS.map((monthLabel, index) => {
-                const monthNumber = index + 1;
-                const monthValue = `${yearCursor}-${String(monthNumber).padStart(2, '0')}`;
-                const isSelected = monthValue === value;
+            {showYearPicker ? (
+              <View style={styles.yearGrid}>
+                {years.map((year) => {
+                  const isSelected = year === yearCursor;
 
-                return (
-                  <Pressable
-                    key={monthLabel}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      if (isValidMonthOnly(monthValue)) {
-                        onChange(monthValue);
-                        setIsOpen(false);
-                      }
-                    }}
-                    style={({ pressed }) => [styles.monthItem, isSelected ? styles.monthSelected : null, pressed ? styles.pressed : null]}
-                  >
-                    <Text style={isSelected ? styles.monthTextSelected : styles.monthText}>{monthLabel}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+                  return (
+                    <Pressable
+                      key={year}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        setYearCursor(year);
+                        setShowYearPicker(false);
+                      }}
+                      style={({ pressed }) => [styles.yearItem, isSelected ? styles.yearSelected : null, pressed ? styles.pressed : null]}
+                    >
+                      <Text style={isSelected ? styles.yearTextSelected : styles.yearText}>{year}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : (
+              <View style={styles.monthGrid}>
+                {MONTHS.map((monthLabel, index) => {
+                  const monthNumber = index + 1;
+                  const monthValue = `${yearCursor}-${String(monthNumber).padStart(2, '0')}`;
+                  const isSelected = monthValue === value;
+
+                  return (
+                    <Pressable
+                      key={monthLabel}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        if (isValidMonthOnly(monthValue)) {
+                          onChange(monthValue);
+                          setIsOpen(false);
+                        }
+                      }}
+                      style={({ pressed }) => [styles.monthItem, isSelected ? styles.monthSelected : null, pressed ? styles.pressed : null]}
+                    >
+                      <Text style={isSelected ? styles.monthTextSelected : styles.monthText}>{monthLabel}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -219,6 +252,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: colors.background,
+  },
+
+  yearGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: spacing.sm,
+    columnGap: spacing.sm,
+  },
+  yearItem: {
+    width: '31%',
+    minHeight: 44,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  yearSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  yearText: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  yearTextSelected: {
+    fontSize: 14,
+    color: colors.background,
+    fontWeight: '700',
   },
   pressed: {
     opacity: 0.82,

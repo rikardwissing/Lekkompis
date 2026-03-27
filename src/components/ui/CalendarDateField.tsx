@@ -7,6 +7,7 @@ import { spacing } from '@/theme/spacing';
 type CalendarDateFieldProps = {
   label: string;
   placeholder?: string;
+  helperText?: string;
   value: string;
   onChange: (value: string) => void;
 };
@@ -21,7 +22,7 @@ const toIsoDate = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const fromIsoDate = (value: string) => {
+export const parseIsoDate = (value: string) => {
   const [year, month, day] = value.split('-').map((part) => Number.parseInt(part, 10));
 
   if (!year || !month || !day) {
@@ -38,7 +39,7 @@ const fromIsoDate = (value: string) => {
 };
 
 export const formatCalendarDateLabel = (value: string) => {
-  const date = fromIsoDate(value);
+  const date = parseIsoDate(value);
 
   if (!date) {
     return '';
@@ -66,8 +67,15 @@ const getMonthDays = (monthCursor: Date) => {
   });
 };
 
-export function CalendarDateField({ label, placeholder = 'Pick a date', value, onChange }: CalendarDateFieldProps) {
-  const selectedDate = useMemo(() => fromIsoDate(value), [value]);
+export function CalendarDateField({
+  label,
+  placeholder = 'Pick a date',
+  helperText,
+  value,
+  onChange,
+}: CalendarDateFieldProps) {
+  const selectedDate = useMemo(() => parseIsoDate(value), [value]);
+  const todayIso = useMemo(() => toIsoDate(new Date()), []);
   const [isOpen, setIsOpen] = useState(false);
   const [monthCursor, setMonthCursor] = useState<Date>(() => selectedDate ?? new Date());
 
@@ -80,15 +88,19 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', value, o
 
   return (
     <View style={styles.wrapper}>
-      <Text style={styles.label}>{label}</Text>
-      <Pressable
-        accessibilityRole="button"
-        onPress={openPicker}
-        style={({ pressed }) => [styles.trigger, pressed ? styles.pressed : null]}
-      >
+      <View style={styles.headerRow}>
+        <Text style={styles.label}>{label}</Text>
+        {value ? (
+          <Pressable accessibilityRole="button" onPress={() => onChange('')}>
+            <Text style={styles.clear}>Clear</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <Pressable accessibilityRole="button" onPress={openPicker} style={({ pressed }) => [styles.trigger, pressed ? styles.pressed : null]}>
         <Text style={value ? styles.value : styles.placeholder}>{value ? formatCalendarDateLabel(value) : placeholder}</Text>
-        <Text style={styles.action}>{value ? 'Change' : 'Pick'}</Text>
+        <Text style={styles.action}>{value ? 'Edit' : 'Pick'}</Text>
       </Pressable>
+      {helperText ? <Text style={styles.helperText}>{helperText}</Text> : null}
 
       <Modal animationType="fade" onRequestClose={() => setIsOpen(false)} transparent visible={isOpen}>
         <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)}>
@@ -101,7 +113,9 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', value, o
               >
                 <Text style={styles.navButtonText}>‹</Text>
               </Pressable>
-              <Text style={styles.monthLabel}>{MONTHS[monthCursor.getMonth()]} {monthCursor.getFullYear()}</Text>
+              <Text style={styles.monthLabel}>
+                {MONTHS[monthCursor.getMonth()]} {monthCursor.getFullYear()}
+              </Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
@@ -113,7 +127,9 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', value, o
 
             <View style={styles.weekHeader}>
               {WEEKDAYS.map((dayLabel) => (
-                <Text key={dayLabel} style={styles.weekday}>{dayLabel}</Text>
+                <Text key={dayLabel} style={styles.weekday}>
+                  {dayLabel}
+                </Text>
               ))}
             </View>
 
@@ -125,6 +141,7 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', value, o
 
                 const dateIso = toIsoDate(date);
                 const isSelected = dateIso === value;
+                const isToday = dateIso === todayIso;
 
                 return (
                   <Pressable
@@ -134,11 +151,7 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', value, o
                       onChange(dateIso);
                       setIsOpen(false);
                     }}
-                    style={({ pressed }) => [
-                      styles.day,
-                      isSelected ? styles.daySelected : null,
-                      pressed ? styles.pressed : null,
-                    ]}
+                    style={({ pressed }) => [styles.day, isSelected ? styles.daySelected : null, isToday ? styles.dayToday : null, pressed ? styles.pressed : null]}
                   >
                     <Text style={isSelected ? styles.dayTextSelected : styles.dayText}>{date.getDate()}</Text>
                   </Pressable>
@@ -156,10 +169,20 @@ const styles = StyleSheet.create({
   wrapper: {
     gap: spacing.sm,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   label: {
     fontSize: 13,
     fontWeight: '700',
     color: colors.textMuted,
+  },
+  clear: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.secondary,
   },
   trigger: {
     minHeight: 52,
@@ -177,6 +200,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: colors.text,
+    fontWeight: '600',
   },
   placeholder: {
     flex: 1,
@@ -184,13 +208,18 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   action: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: colors.primary,
   },
+  helperText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textMuted,
+  },
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(31, 42, 36, 0.35)",
+    backgroundColor: 'rgba(31, 42, 36, 0.35)',
     justifyContent: 'center',
     padding: spacing.lg,
   },
@@ -199,6 +228,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     padding: spacing.md,
     gap: spacing.md,
+    shadowColor: '#000000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -227,33 +261,37 @@ const styles = StyleSheet.create({
   },
   weekHeader: {
     flexDirection: 'row',
+    marginBottom: spacing.xs,
   },
   weekday: {
-    flex: 1,
+    width: `${100 / 7}%`,
     textAlign: 'center',
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   dayGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
+    rowGap: spacing.xs,
   },
   day: {
-    width: '13.4%',
+    width: `${100 / 7}%`,
     aspectRatio: 1,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
   },
   emptyDay: {
-    width: '13.4%',
+    width: `${100 / 7}%`,
     aspectRatio: 1,
   },
   daySelected: {
     backgroundColor: colors.primary,
+  },
+  dayToday: {
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
   dayText: {
     fontSize: 14,
@@ -266,6 +304,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   pressed: {
-    opacity: 0.85,
+    opacity: 0.82,
   },
 });

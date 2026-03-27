@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, type ComponentType } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
-import { formatMonthOnly, isValidMonthOnly, monthOnlyToDate, toMonthOnlyString } from '@/utils/birthdays';
+import { formatMonthOnly, isValidMonthOnly } from '@/utils/birthdays';
 
 type MonthFieldProps = {
   label: string;
@@ -12,112 +12,91 @@ type MonthFieldProps = {
   onChange: (value: string) => void;
 };
 
-const NativeDateTimePicker =
-  Platform.OS === 'web' ? null : (require('@react-native-community/datetimepicker').default as ComponentType<any>);
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const digitsOnly = (value: string, maxLength: number) =>
-  value.replace(/[^0-9]/g, '').slice(0, maxLength);
+const parseMonthYear = (value: string) => {
+  const [year, month] = value.split('-').map((part) => Number.parseInt(part, 10));
+
+  if (!year || !month) {
+    return null;
+  }
+
+  return { year, month };
+};
 
 export function MonthField({ label, placeholder = 'Add due month', value, onChange }: MonthFieldProps) {
+  const parsed = useMemo(() => parseMonthYear(value), [value]);
   const [isOpen, setIsOpen] = useState(false);
-  const [webMonth, setWebMonth] = useState('');
-  const [webYear, setWebYear] = useState('');
+  const [yearCursor, setYearCursor] = useState(parsed?.year ?? new Date().getFullYear());
 
-  useEffect(() => {
-    if (!isValidMonthOnly(value)) {
-      setWebMonth('');
-      setWebYear('');
-      return;
-    }
-
-    const [year, month] = value.split('-');
-    setWebMonth(month);
-    setWebYear(year);
-  }, [value]);
-
-  const pickerValue = useMemo(() => monthOnlyToDate(value) ?? new Date(2026, 8, 1), [value]);
-
-  const commitWebValue = (nextMonth: string, nextYear: string) => {
-    if (nextMonth.length === 0 && nextYear.length === 0) {
-      onChange('');
-      return;
-    }
-
-    if (nextMonth.length === 2 && nextYear.length === 4) {
-      const nextValue = `${nextYear}-${nextMonth}`;
-      onChange(isValidMonthOnly(nextValue) ? nextValue : '');
-    }
+  const openPicker = () => {
+    setYearCursor(parsed?.year ?? new Date().getFullYear());
+    setIsOpen(true);
   };
-
-  if (Platform.OS === 'web') {
-    return (
-      <View style={styles.wrapper}>
-        <Text style={styles.label}>{label}</Text>
-        <View style={styles.webRow}>
-          <TextInput
-            keyboardType="number-pad"
-            maxLength={2}
-            onChangeText={(nextValue) => {
-              const parsed = digitsOnly(nextValue, 2);
-              setWebMonth(parsed);
-              commitWebValue(parsed, webYear);
-            }}
-            placeholder="MM"
-            placeholderTextColor={colors.textMuted}
-            style={[styles.webInput, styles.webInputSmall]}
-            value={webMonth}
-          />
-          <TextInput
-            keyboardType="number-pad"
-            maxLength={4}
-            onChangeText={(nextValue) => {
-              const parsed = digitsOnly(nextValue, 4);
-              setWebYear(parsed);
-              commitWebValue(webMonth, parsed);
-            }}
-            placeholder="YYYY"
-            placeholderTextColor={colors.textMuted}
-            style={[styles.webInput, styles.webInputLarge]}
-            value={webYear}
-          />
-        </View>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.wrapper}>
-      <Text style={styles.label}>{label}</Text>
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => setIsOpen((current) => !current)}
-        style={({ pressed }) => [styles.nativeTrigger, pressed ? styles.pressed : null]}
-      >
-        <Text style={value ? styles.nativeValue : styles.nativePlaceholder}>
-          {value ? formatMonthOnly(value) : placeholder}
-        </Text>
-        <Text style={styles.nativeAction}>{isOpen ? 'Hide' : 'Pick'}</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.label}>{label}</Text>
+        {value ? (
+          <Pressable accessibilityRole="button" onPress={() => onChange('')}>
+            <Text style={styles.clear}>Clear</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      <Pressable accessibilityRole="button" onPress={openPicker} style={({ pressed }) => [styles.trigger, pressed ? styles.pressed : null]}>
+        <Text style={value ? styles.value : styles.placeholder}>{value ? formatMonthOnly(value) : placeholder}</Text>
+        <Text style={styles.action}>{value ? 'Edit' : 'Pick'}</Text>
       </Pressable>
-      {isOpen && NativeDateTimePicker ? (
-        <View style={styles.nativePickerShell}>
-          <NativeDateTimePicker
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            mode="date"
-            onChange={(event: { type?: string }, selectedDate?: Date) => {
-              if (Platform.OS === 'android') {
-                setIsOpen(false);
-              }
 
-              if (event?.type === 'dismissed' || !selectedDate) {
-                return;
-              }
+      <Modal animationType="fade" onRequestClose={() => setIsOpen(false)} transparent visible={isOpen}>
+        <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)}>
+          <Pressable style={styles.modalCard} onPress={() => undefined}>
+            <View style={styles.modalHeader}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setYearCursor((current) => current - 1)}
+                style={styles.navButton}
+              >
+                <Text style={styles.navButtonText}>‹</Text>
+              </Pressable>
+              <Text style={styles.yearLabel}>{yearCursor}</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setYearCursor((current) => current + 1)}
+                style={styles.navButton}
+              >
+                <Text style={styles.navButtonText}>›</Text>
+              </Pressable>
+            </View>
 
-              onChange(toMonthOnlyString(selectedDate));
-            }}
-            value={pickerValue}
-          />
-        </View>
-      ) : null}
+            <View style={styles.monthGrid}>
+              {MONTHS.map((monthLabel, index) => {
+                const monthNumber = index + 1;
+                const monthValue = `${yearCursor}-${String(monthNumber).padStart(2, '0')}`;
+                const isSelected = monthValue === value;
+
+                return (
+                  <Pressable
+                    key={monthLabel}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      if (isValidMonthOnly(monthValue)) {
+                        onChange(monthValue);
+                        setIsOpen(false);
+                      }
+                    }}
+                    style={({ pressed }) => [styles.monthItem, isSelected ? styles.monthSelected : null, pressed ? styles.pressed : null]}
+                  >
+                    <Text style={isSelected ? styles.monthTextSelected : styles.monthText}>{monthLabel}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -126,12 +105,22 @@ const styles = StyleSheet.create({
   wrapper: {
     gap: spacing.sm,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   label: {
     fontSize: 13,
     fontWeight: '700',
     color: colors.textMuted,
   },
-  nativeTrigger: {
+  clear: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.secondary,
+  },
+  trigger: {
     minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
@@ -143,48 +132,95 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     gap: spacing.md,
   },
-  nativeValue: {
+  value: {
     flex: 1,
     fontSize: 16,
     color: colors.text,
+    fontWeight: '600',
   },
-  nativePlaceholder: {
+  placeholder: {
     flex: 1,
     fontSize: 16,
     color: colors.textMuted,
   },
-  nativeAction: {
-    fontSize: 14,
+  action: {
+    fontSize: 13,
     fontWeight: '700',
     color: colors.primary,
   },
-  nativePickerShell: {
-    alignSelf: 'stretch',
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(31, 42, 36, 0.35)',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    borderRadius: radius.lg,
+    backgroundColor: colors.background,
+    padding: spacing.md,
+    gap: spacing.md,
+    shadowColor: '#000000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  yearLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  navButton: {
+    minWidth: 36,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
   },
-  webRow: {
+  navButtonText: {
+    fontSize: 22,
+    lineHeight: 24,
+    color: colors.text,
+  },
+  monthGrid: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    flexWrap: 'wrap',
+    rowGap: spacing.sm,
+    columnGap: spacing.sm,
   },
-  webInput: {
-    minHeight: 52,
+  monthItem: {
+    width: '31%',
+    minHeight: 48,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  monthText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.text,
-    fontSize: 16,
   },
-  webInputSmall: {
-    flex: 1,
-  },
-  webInputLarge: {
-    flex: 1.4,
+  monthTextSelected: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.background,
   },
   pressed: {
-    opacity: 0.85,
+    opacity: 0.82,
   },
 });

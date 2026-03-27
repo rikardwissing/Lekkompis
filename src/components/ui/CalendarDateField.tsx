@@ -156,18 +156,13 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
   const [isOpen, setIsOpen] = useState(false);
   const [mode, setMode] = useState<PickerMode>('days');
   const [monthCursor, setMonthCursor] = useState<Date>(() => selectedDate ?? new Date());
-  const [contentHeights, setContentHeights] = useState<Record<PickerMode, number>>({
-    days: 320,
-    months: 220,
-    years: 220,
-  });
-
-  const monthDays = useMemo(() => getMonthDays(monthCursor, normalizedFirstDay), [monthCursor, normalizedFirstDay]);
-  const yearRange = useMemo(() => getYearRange(monthCursor.getFullYear()), [monthCursor]);
+  const [pageWidth, setPageWidth] = useState(320);
+  const [contentHeights, setContentHeights] = useState<Record<PickerMode, number>>({ days: 320, months: 220, years: 220 });
 
   const modeAnim = useRef(new Animated.Value(1)).current;
   const panX = useRef(new Animated.Value(0)).current;
   const contentHeight = useRef(new Animated.Value(contentHeights.days)).current;
+  const isPagingRef = useRef(false);
 
   useEffect(() => {
     modeAnim.setValue(0);
@@ -178,7 +173,6 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
       bounciness: 6,
     }).start();
   }, [mode, modeAnim]);
-
 
   useEffect(() => {
     Animated.timing(contentHeight, {
@@ -207,11 +201,33 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
   const openPicker = () => {
     setMonthCursor(selectedDate ?? new Date());
     setMode('days');
+    panX.setValue(0);
+    isPagingRef.current = false;
     setIsOpen(true);
   };
 
-  const advance = (direction: -1 | 1) => {
+  const completePageShift = (direction: -1 | 1) => {
     setMonthCursor((current) => moveCursor(current, mode, direction));
+    panX.setValue(0);
+    isPagingRef.current = false;
+  };
+
+  const animatePageShift = (direction: -1 | 1) => {
+    if (isPagingRef.current) {
+      return;
+    }
+
+    isPagingRef.current = true;
+    const exitTarget = direction === 1 ? -pageWidth : pageWidth;
+
+    Animated.timing(panX, {
+      toValue: exitTarget,
+      duration: 180,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      completePageShift(direction);
+    });
   };
 
   const panResponder = useMemo(
@@ -220,30 +236,22 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
         onMoveShouldSetPanResponder: (_, gestureState) =>
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10,
         onPanResponderMove: (_, gestureState) => {
-          panX.setValue(gestureState.dx);
+          if (!isPagingRef.current) {
+            panX.setValue(gestureState.dx);
+          }
         },
         onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx > SWIPE_THRESHOLD || gestureState.dx < -SWIPE_THRESHOLD) {
-            const direction = gestureState.dx > 0 ? 1 : -1;
-            const offset = 280;
-            const step = direction > 0 ? -1 : 1;
+          if (isPagingRef.current) {
+            return;
+          }
 
-            Animated.timing(panX, {
-              toValue: direction * offset,
-              duration: 140,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: true,
-            }).start(() => {
-              advance(step);
-              panX.setValue(-direction * offset);
-              Animated.timing(panX, {
-                toValue: 0,
-                duration: 190,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: true,
-              }).start();
-            });
+          if (gestureState.dx > SWIPE_THRESHOLD) {
+            animatePageShift(-1);
+            return;
+          }
 
+          if (gestureState.dx < -SWIPE_THRESHOLD) {
+            animatePageShift(1);
             return;
           }
 
@@ -255,23 +263,132 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
           }).start();
         },
       }),
-    [mode]
+    [mode, pageWidth]
   );
 
   const modeTransitionStyle = {
     opacity: modeAnim,
     transform: [
       {
-        translateX: panX,
-      },
-      {
         scale: modeAnim.interpolate({
           inputRange: [0, 1],
-          outputRange: [0.95, 1],
+          outputRange: [0.96, 1],
         }),
       },
     ],
   };
+
+  const pagerTranslate = panX.interpolate({
+    inputRange: [-pageWidth, pageWidth],
+    outputRange: [-pageWidth * 2, 0],
+    extrapolate: 'extend',
+  });
+
+  const renderModePanel = (cursor: Date, slot: 'prev' | 'current' | 'next') => {
+    const monthDays = getMonthDays(cursor, normalizedFirstDay);
+    const yearRange = getYearRange(cursor.getFullYear());
+    const shouldMeasure = slot === 'current';
+
+    if (mode === 'days') {
+      return (
+        <View
+          onLayout={shouldMeasure ? (event) => measureContentHeight('days', event.nativeEvent.layout.height) : undefined}
+          style={styles.panelInner}
+        >
+          <View style={styles.weekHeader}>
+            {weekdayLabels.map((dayLabel) => (
+              <Text key={dayLabel} style={styles.weekday}>
+                {dayLabel}
+              </Text>
+            ))}
+          </View>
+
+          <View style={styles.dayGrid}>
+            {monthDays.map((date, index) => {
+              if (!date) {
+                return <View key={`empty-${slot}-${index}`} style={styles.emptyDay} />;
+              }
+
+              const dateIso = toIsoDate(date);
+              const isSelected = dateIso === value;
+              const isToday = dateIso === todayIso;
+
+              return (
+                <Pressable
+                  key={`${slot}-${dateIso}`}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    onChange(dateIso);
+                    setIsOpen(false);
+                  }}
+                  style={({ pressed }) => [styles.day, pressed ? styles.pressed : null]}
+                >
+                  <View style={[styles.dayInner, isSelected ? styles.dayInnerSelected : null, isToday ? styles.dayInnerToday : null]}>
+                    <Text style={isSelected ? styles.dayTextSelected : styles.dayText}>{date.getDate()}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      );
+    }
+
+    if (mode === 'months') {
+      return (
+        <View
+          onLayout={shouldMeasure ? (event) => measureContentHeight('months', event.nativeEvent.layout.height) : undefined}
+          style={styles.selectionGrid}
+        >
+          {MONTHS.map((monthLabel, index) => {
+            const isSelected = cursor.getMonth() === index;
+
+            return (
+              <Pressable
+                key={`${slot}-${monthLabel}`}
+                accessibilityRole="button"
+                onPress={() => {
+                  setMonthCursor((current) => new Date(current.getFullYear(), index, 1));
+                  setMode('days');
+                }}
+                style={({ pressed }) => [styles.selectionItem, isSelected ? styles.selectionItemSelected : null, pressed ? styles.pressed : null]}
+              >
+                <Text style={isSelected ? styles.selectionTextSelected : styles.selectionText}>{monthLabel}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      );
+    }
+
+    return (
+      <View
+        onLayout={shouldMeasure ? (event) => measureContentHeight('years', event.nativeEvent.layout.height) : undefined}
+        style={styles.selectionGrid}
+      >
+        {yearRange.map((year) => {
+          const isSelected = year === cursor.getFullYear();
+
+          return (
+            <Pressable
+              key={`${slot}-${year}`}
+              accessibilityRole="button"
+              onPress={() => {
+                setMonthCursor((current) => new Date(year, current.getMonth(), 1));
+                setMode('days');
+              }}
+              style={({ pressed }) => [styles.selectionItem, isSelected ? styles.selectionItemSelected : null, pressed ? styles.pressed : null]}
+            >
+              <Text style={isSelected ? styles.selectionTextSelected : styles.selectionText}>{year}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  };
+
+  const prevCursor = moveCursor(monthCursor, mode, -1);
+  const nextCursor = moveCursor(monthCursor, mode, 1);
 
   return (
     <View style={styles.wrapper}>
@@ -293,103 +410,35 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
         <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)}>
           <Pressable style={styles.modalCard} onPress={() => undefined}>
             <View style={styles.modalHeader}>
-              <Pressable accessibilityRole="button" onPress={() => advance(-1)} style={styles.navButton}>
+              <Pressable accessibilityRole="button" onPress={() => animatePageShift(-1)} style={styles.navButton}>
                 <Text style={styles.navButtonText}>‹</Text>
               </Pressable>
               <Pressable accessibilityRole="button" onPress={() => setMode((current) => getNextMode(current))} style={styles.headerCenter}>
                 <Text style={styles.monthLabel}>{getModeLabel(mode, monthCursor)}</Text>
                 <Text style={styles.modeHint}>{mode === 'days' ? 'Swipe for months' : mode === 'months' ? 'Swipe for years' : 'Swipe for year ranges'}</Text>
               </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => advance(1)} style={styles.navButton}>
+              <Pressable accessibilityRole="button" onPress={() => animatePageShift(1)} style={styles.navButton}>
                 <Text style={styles.navButtonText}>›</Text>
               </Pressable>
             </View>
 
             <Animated.View style={[styles.heightShell, { height: contentHeight }]}>
               <Animated.View {...panResponder.panHandlers} style={[styles.contentShell, modeTransitionStyle]}>
-              {mode === 'days' ? (
-                <View onLayout={(event) => measureContentHeight('days', event.nativeEvent.layout.height)}>
-                  <View style={styles.weekHeader}>
-                    {weekdayLabels.map((dayLabel) => (
-                      <Text key={dayLabel} style={styles.weekday}>
-                        {dayLabel}
-                      </Text>
-                    ))}
-                  </View>
-
-                  <View style={styles.dayGrid}>
-                    {monthDays.map((date, index) => {
-                      if (!date) {
-                        return <View key={`empty-${index}`} style={styles.emptyDay} />;
-                      }
-
-                      const dateIso = toIsoDate(date);
-                      const isSelected = dateIso === value;
-                      const isToday = dateIso === todayIso;
-
-                      return (
-                        <Pressable
-                          key={dateIso}
-                          accessibilityRole="button"
-                          onPress={() => {
-                            onChange(dateIso);
-                            setIsOpen(false);
-                          }}
-                          style={({ pressed }) => [styles.day, pressed ? styles.pressed : null]}
-                        >
-                          <View style={[styles.dayInner, isSelected ? styles.dayInnerSelected : null, isToday ? styles.dayInnerToday : null]}>
-                            <Text style={isSelected ? styles.dayTextSelected : styles.dayText}>{date.getDate()}</Text>
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
+                <View style={styles.viewport} onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}>
+                  <Animated.View
+                    style={[
+                      styles.pagerRow,
+                      {
+                        width: pageWidth * 3,
+                        transform: [{ translateX: pagerTranslate }],
+                      },
+                    ]}
+                  >
+                    <View style={[styles.page, { width: pageWidth }]}>{renderModePanel(prevCursor, 'prev')}</View>
+                    <View style={[styles.page, { width: pageWidth }]}>{renderModePanel(monthCursor, 'current')}</View>
+                    <View style={[styles.page, { width: pageWidth }]}>{renderModePanel(nextCursor, 'next')}</View>
+                  </Animated.View>
                 </View>
-              ) : null}
-
-              {mode === 'months' ? (
-                <View onLayout={(event) => measureContentHeight('months', event.nativeEvent.layout.height)} style={styles.selectionGrid}>
-                  {MONTHS.map((monthLabel, index) => {
-                    const isSelected = monthCursor.getMonth() === index;
-
-                    return (
-                      <Pressable
-                        key={monthLabel}
-                        accessibilityRole="button"
-                        onPress={() => {
-                          setMonthCursor((current) => new Date(current.getFullYear(), index, 1));
-                          setMode('days');
-                        }}
-                        style={({ pressed }) => [styles.selectionItem, isSelected ? styles.selectionItemSelected : null, pressed ? styles.pressed : null]}
-                      >
-                        <Text style={isSelected ? styles.selectionTextSelected : styles.selectionText}>{monthLabel}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : null}
-
-              {mode === 'years' ? (
-                <View onLayout={(event) => measureContentHeight('years', event.nativeEvent.layout.height)} style={styles.selectionGrid}>
-                  {yearRange.map((year) => {
-                    const isSelected = year === monthCursor.getFullYear();
-
-                    return (
-                      <Pressable
-                        key={year}
-                        accessibilityRole="button"
-                        onPress={() => {
-                          setMonthCursor((current) => new Date(year, current.getMonth(), 1));
-                          setMode('days');
-                        }}
-                        style={({ pressed }) => [styles.selectionItem, isSelected ? styles.selectionItemSelected : null, pressed ? styles.pressed : null]}
-                      >
-                        <Text style={isSelected ? styles.selectionTextSelected : styles.selectionText}>{year}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : null}
               </Animated.View>
             </Animated.View>
           </Pressable>
@@ -508,6 +557,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   contentShell: {
+    gap: spacing.xs,
+  },
+  viewport: {
+    overflow: 'hidden',
+  },
+  pagerRow: {
+    flexDirection: 'row',
+  },
+  page: {
+    paddingHorizontal: 0,
+  },
+  panelInner: {
     gap: spacing.xs,
   },
   weekHeader: {

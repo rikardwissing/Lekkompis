@@ -28,13 +28,13 @@ const toIsoDate = (date: Date) => {
 const getDefaultFirstDayOfWeek = () => {
   try {
     const locale = Intl.DateTimeFormat().resolvedOptions().locale;
-    const intlWithLocale = Intl as Intl & { Locale?: new (value: string) => { weekInfo?: { firstDay?: number } } };
+    const intlWithLocale = Intl as typeof Intl & { Locale?: new (value: string) => { weekInfo?: { firstDay?: number } } };
 
     if (!intlWithLocale.Locale) {
       return 0;
     }
 
-    const localeInfo = new intlWithLocale.Locale(locale);
+    const localeInfo = new intlWithLocale.Locale(locale) as { weekInfo?: { firstDay?: number } };
     const weekInfoFirstDay = localeInfo.weekInfo?.firstDay;
 
     if (typeof weekInfoFirstDay === 'number') {

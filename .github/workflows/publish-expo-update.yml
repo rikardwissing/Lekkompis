@@ -108,7 +108,8 @@ jobs:
 
             - **Open in Expo Go:** [Launch in Expo Go](${expoGoRedirectLink})
             - **Expo dashboard:** [Open update page](${{ steps.preview.outputs.link }})
-            - **QR code:** [View QR code](${{ steps.preview.outputs.qr }})
+            - **QR code image:**
+              ![Expo preview QR code](${{ steps.preview.outputs.qr }})
             `;
 
             const { owner, repo } = context.repo;

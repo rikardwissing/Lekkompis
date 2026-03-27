@@ -102,7 +102,7 @@ jobs:
           script: |
             const marker = '<!-- expo-preview-link -->';
             const expoGoLink = `${{ steps.preview.outputs.link }}`.replace(/^https:\/\//, 'exp://');
-            const expoGoRedirectLink = `https://redirectmeto.com/${encodeURIComponent(expoGoLink)}`;
+            const expoGoRedirectLink = `https://www.google.com/url?q=${encodeURIComponent(expoGoLink)}`;
             const body = `${marker}
             ## Expo Preview
 

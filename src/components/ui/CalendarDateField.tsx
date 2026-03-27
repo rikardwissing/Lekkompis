@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
@@ -17,7 +17,6 @@ type PickerMode = 'days' | 'months' | 'years';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const SWIPE_THRESHOLD = 42;
 
 const toIsoDate = (date: Date) => {
   const year = date.getFullYear();
@@ -159,10 +158,10 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
   const [pageWidth, setPageWidth] = useState(320);
   const [contentHeights, setContentHeights] = useState<Record<PickerMode, number>>({ days: 320, months: 220, years: 220 });
 
+  const scrollRef = useRef<ScrollView | null>(null);
   const modeAnim = useRef(new Animated.Value(1)).current;
-  const panX = useRef(new Animated.Value(0)).current;
   const contentHeight = useRef(new Animated.Value(contentHeights.days)).current;
-  const isPagingRef = useRef(false);
+  const isAdjustingRef = useRef(false);
 
   useEffect(() => {
     modeAnim.setValue(0);
@@ -183,6 +182,14 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
     }).start();
   }, [contentHeight, contentHeights, mode]);
 
+  useEffect(() => {
+    if (isOpen) {
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ x: pageWidth, animated: false });
+      });
+    }
+  }, [isOpen, pageWidth, monthCursor, mode]);
+
   const measureContentHeight = (targetMode: PickerMode, measuredHeight: number) => {
     const roundedHeight = Math.ceil(measuredHeight);
 
@@ -201,88 +208,37 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
   const openPicker = () => {
     setMonthCursor(selectedDate ?? new Date());
     setMode('days');
-    panX.setValue(0);
-    isPagingRef.current = false;
     setIsOpen(true);
   };
 
-  const completePageShift = (direction: -1 | 1) => {
-    setMonthCursor((current) => moveCursor(current, mode, direction));
-    panX.setValue(0);
-    isPagingRef.current = false;
-  };
-
-  const animatePageShift = (direction: -1 | 1) => {
-    if (isPagingRef.current) {
+  const pageByDirection = (direction: -1 | 1) => {
+    if (isAdjustingRef.current) {
       return;
     }
 
-    isPagingRef.current = true;
-    const exitTarget = direction === 1 ? -pageWidth : pageWidth;
+    scrollRef.current?.scrollTo({ x: direction === -1 ? 0 : pageWidth * 2, animated: true });
+  };
 
-    Animated.timing(panX, {
-      toValue: exitTarget,
-      duration: 180,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
-      completePageShift(direction);
+  const onMomentumEnd = (xOffset: number) => {
+    if (isAdjustingRef.current || pageWidth <= 0) {
+      return;
+    }
+
+    const page = Math.round(xOffset / pageWidth);
+    if (page === 1) {
+      return;
+    }
+
+    const direction = page < 1 ? -1 : 1;
+    isAdjustingRef.current = true;
+
+    setMonthCursor((current) => moveCursor(current, mode, direction));
+
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ x: pageWidth, animated: false });
+      isAdjustingRef.current = false;
     });
   };
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10,
-        onPanResponderMove: (_, gestureState) => {
-          if (!isPagingRef.current) {
-            panX.setValue(gestureState.dx);
-          }
-        },
-        onPanResponderRelease: (_, gestureState) => {
-          if (isPagingRef.current) {
-            return;
-          }
-
-          if (gestureState.dx > SWIPE_THRESHOLD) {
-            animatePageShift(-1);
-            return;
-          }
-
-          if (gestureState.dx < -SWIPE_THRESHOLD) {
-            animatePageShift(1);
-            return;
-          }
-
-          Animated.spring(panX, {
-            toValue: 0,
-            useNativeDriver: true,
-            speed: 18,
-            bounciness: 4,
-          }).start();
-        },
-      }),
-    [mode, pageWidth]
-  );
-
-  const modeTransitionStyle = {
-    opacity: modeAnim,
-    transform: [
-      {
-        scale: modeAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0.96, 1],
-        }),
-      },
-    ],
-  };
-
-  const pagerTranslate = panX.interpolate({
-    inputRange: [-pageWidth, pageWidth],
-    outputRange: [-pageWidth * 2, 0],
-    extrapolate: 'extend',
-  });
 
   const renderModePanel = (cursor: Date, slot: 'prev' | 'current' | 'next') => {
     const monthDays = getMonthDays(cursor, normalizedFirstDay);
@@ -410,34 +366,48 @@ export function CalendarDateField({ label, placeholder = 'Pick a date', helperTe
         <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)}>
           <Pressable style={styles.modalCard} onPress={() => undefined}>
             <View style={styles.modalHeader}>
-              <Pressable accessibilityRole="button" onPress={() => animatePageShift(-1)} style={styles.navButton}>
+              <Pressable accessibilityRole="button" onPress={() => pageByDirection(-1)} style={styles.navButton}>
                 <Text style={styles.navButtonText}>‹</Text>
               </Pressable>
               <Pressable accessibilityRole="button" onPress={() => setMode((current) => getNextMode(current))} style={styles.headerCenter}>
                 <Text style={styles.monthLabel}>{getModeLabel(mode, monthCursor)}</Text>
                 <Text style={styles.modeHint}>{mode === 'days' ? 'Swipe for months' : mode === 'months' ? 'Swipe for years' : 'Swipe for year ranges'}</Text>
               </Pressable>
-              <Pressable accessibilityRole="button" onPress={() => animatePageShift(1)} style={styles.navButton}>
+              <Pressable accessibilityRole="button" onPress={() => pageByDirection(1)} style={styles.navButton}>
                 <Text style={styles.navButtonText}>›</Text>
               </Pressable>
             </View>
 
-            <Animated.View style={[styles.heightShell, { height: contentHeight }]}>
-              <Animated.View {...panResponder.panHandlers} style={[styles.contentShell, modeTransitionStyle]}>
-                <View style={styles.viewport} onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}>
-                  <Animated.View
-                    style={[
-                      styles.pagerRow,
+            <Animated.View style={[styles.heightShell, { height: contentHeight }]}> 
+              <Animated.View
+                style={[
+                  styles.contentShell,
+                  {
+                    opacity: modeAnim,
+                    transform: [
                       {
-                        width: pageWidth * 3,
-                        transform: [{ translateX: pagerTranslate }],
+                        scale: modeAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.96, 1],
+                        }),
                       },
-                    ]}
+                    ],
+                  },
+                ]}
+              >
+                <View style={styles.viewport} onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}>
+                  <ScrollView
+                    horizontal
+                    pagingEnabled
+                    ref={scrollRef}
+                    scrollEventThrottle={16}
+                    showsHorizontalScrollIndicator={false}
+                    onMomentumScrollEnd={(event) => onMomentumEnd(event.nativeEvent.contentOffset.x)}
                   >
                     <View style={[styles.page, { width: pageWidth }]}>{renderModePanel(prevCursor, 'prev')}</View>
                     <View style={[styles.page, { width: pageWidth }]}>{renderModePanel(monthCursor, 'current')}</View>
                     <View style={[styles.page, { width: pageWidth }]}>{renderModePanel(nextCursor, 'next')}</View>
-                  </Animated.View>
+                  </ScrollView>
                 </View>
               </Animated.View>
             </Animated.View>
@@ -561,9 +531,6 @@ const styles = StyleSheet.create({
   },
   viewport: {
     overflow: 'hidden',
-  },
-  pagerRow: {
-    flexDirection: 'row',
   },
   page: {
     paddingHorizontal: 0,

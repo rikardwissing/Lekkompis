@@ -157,12 +157,12 @@ export default function GroupChatScreen() {
 
   if (!groupPlayDate) {
     return (
-      <Screen header={<SubscreenHeader fallbackHref="/conversations" title="Group chat" />}>
+      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/inbox" title="Group chat" />}>
         <EmptyState
           title="Group chat not found"
           body="This group thread is no longer part of the current demo state, so we stopped before showing the wrong meetup."
-          actionLabel="Back to conversations"
-          onAction={() => router.replace('/conversations')}
+          actionLabel="Back to inbox"
+          onAction={() => router.replace('/(tabs)/inbox')}
         />
       </Screen>
     );
@@ -172,7 +172,7 @@ export default function GroupChatScreen() {
 
   if (groupPlayDate.membership !== 'none' && !isSharedWithActiveParent) {
     return (
-      <Screen header={<SubscreenHeader fallbackHref="/conversations" title={groupPlayDate.title} />}>
+      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/inbox" title={groupPlayDate.title} />}>
         <EmptyState
           title="This chat has not been shared with this parent yet"
           body="Another parent in your family needs to add this parent before the thread appears here."
@@ -185,7 +185,7 @@ export default function GroupChatScreen() {
 
   if (!canAccessChat) {
     return (
-      <Screen header={<SubscreenHeader fallbackHref="/conversations" title={groupPlayDate.title} />}>
+      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/inbox" title={groupPlayDate.title} />}>
         <EmptyState
           title="Chat unlocks after approval"
           body="Public event chats open once the host approves your request. You can still review the event details in the meantime."
@@ -212,7 +212,7 @@ export default function GroupChatScreen() {
   return (
     <Screen
       contentStyle={styles.screenContent}
-      header={<SubscreenHeader fallbackHref="/conversations" title={groupPlayDate.title} />}
+      header={<SubscreenHeader fallbackHref="/(tabs)/inbox" title={groupPlayDate.title} />}
     >
       <ChatThread
         attachmentSummaryLabel={

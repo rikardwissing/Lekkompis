@@ -93,7 +93,7 @@ export default function GroupsScreen() {
 
   return (
     <Screen
-      header={<MainAppHeader title="Groups" titleOpacity={headerTitleOpacity} />}
+      header={<MainAppHeader showProfileAction title="Groups" titleOpacity={headerTitleOpacity} />}
       scroll
       onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
         useNativeDriver: true,

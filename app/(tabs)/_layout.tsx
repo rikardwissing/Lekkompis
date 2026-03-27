@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { useAppStore } from '@/store/app-store';
-import { getGroupAttentionCount } from '@/store/derived';
+import { getConversationThreads, getGroupAttentionCount, getUnreadConversationThreadCount } from '@/store/derived';
 import { colors } from '@/theme/colors';
 
 type TabIconName = ComponentProps<typeof Ionicons>['name'];
@@ -20,10 +20,43 @@ function renderTabIcon(outlineIcon: TabIconName, filledIcon: TabIconName) {
 export default function TabsLayout() {
   const currentFamilyId = useAppStore((state) => state.currentFamilyId);
   const draftProfile = useAppStore((state) => state.draftProfile);
+  const directConversationLastSeenAtByParent = useAppStore((state) => state.directConversationLastSeenAtByParent);
+  const matchedParentIdsByParent = useAppStore((state) => state.matchedParentIdsByParent);
+  const groupConversationLastSeenAtByParent = useAppStore((state) => state.groupConversationLastSeenAtByParent);
+  const families = useAppStore((state) => state.families);
+  const messagesByMatch = useAppStore((state) => state.messagesByMatch);
+  const groupMessagesByPlayDate = useAppStore((state) => state.groupMessagesByPlayDate);
   const groupPlayDates = useAppStore((state) => state.groupPlayDates);
   const groupAttentionCount = useMemo(
     () => getGroupAttentionCount(groupPlayDates, currentFamilyId, draftProfile),
     [currentFamilyId, draftProfile, groupPlayDates]
+  );
+  const unreadConversationCount = useMemo(
+    () =>
+      getUnreadConversationThreadCount(
+        getConversationThreads({
+          currentFamilyId,
+          draftProfile,
+          directConversationLastSeenAtByParent,
+          matchedParentIdsByParent,
+          groupConversationLastSeenAtByParent,
+          families,
+          messagesByMatch,
+          groupMessagesByPlayDate,
+          groupPlayDates,
+        })
+      ),
+    [
+      currentFamilyId,
+      directConversationLastSeenAtByParent,
+      draftProfile,
+      families,
+      groupConversationLastSeenAtByParent,
+      groupMessagesByPlayDate,
+      groupPlayDates,
+      matchedParentIdsByParent,
+      messagesByMatch,
+    ]
   );
 
   return (
@@ -32,6 +65,7 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: styles.tabLabel,
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
@@ -46,10 +80,19 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="connections"
+        name="matches"
         options={{
-          title: 'Connections',
-          tabBarIcon: renderTabIcon('chatbubbles-outline', 'chatbubbles'),
+          title: 'Matches',
+          tabBarIcon: renderTabIcon('heart-outline', 'heart'),
+        }}
+      />
+      <Tabs.Screen
+        name="inbox"
+        options={{
+          title: 'Inbox',
+          tabBarIcon: renderTabIcon('chatbubble-ellipses-outline', 'chatbubble-ellipses'),
+          tabBarBadge: unreadConversationCount > 0 ? formatBadgeCount(unreadConversationCount) : undefined,
+          tabBarBadgeStyle: unreadConversationCount > 0 ? styles.tabBadge : undefined,
         }}
       />
       <Tabs.Screen
@@ -61,11 +104,27 @@ export default function TabsLayout() {
           tabBarBadgeStyle: groupAttentionCount > 0 ? styles.tabBadge : undefined,
         }}
       />
+      <Tabs.Screen
+        name="me"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="connections"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
   tabBadge: {
     backgroundColor: colors.primary,
     color: colors.surface,

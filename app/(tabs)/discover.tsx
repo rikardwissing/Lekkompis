@@ -17,7 +17,6 @@ import {
   type FamilySwipeStackHandle,
   type FamilySwipeStackItem,
 } from '@/components/discovery/FamilySwipeStack';
-import { MainAppHeader } from '@/components/navigation/MainAppHeader';
 import { PublicEventCard } from '@/components/discovery/PublicEventCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -508,9 +507,9 @@ export default function DiscoverScreen() {
           }
         : {
             title: 'No more parents to review right now',
-            body: 'Your current likes and matches have moved on to Connections. You can keep browsing later or open your existing conversations now.',
-            actionLabel: 'Open connections',
-            onAction: () => router.push('/(tabs)/connections'),
+            body: 'Your current likes and matches have moved on to Matches. You can keep browsing later or review the parents you already connected with there.',
+            actionLabel: 'Open matches',
+            onAction: () => router.push('/(tabs)/matches'),
           },
     [resetDiscoveryFilters, visibleParentEntries.length]
   );
@@ -678,7 +677,7 @@ export default function DiscoverScreen() {
   );
 
   return (
-    <Screen contentStyle={styles.screenContent} edges={['top', 'left', 'right']} header={<MainAppHeader />}>
+    <Screen contentStyle={styles.screenContent} edges={['top', 'left', 'right']}>
       <View style={styles.root}>
         {mode === 'families' ? (
           <View style={styles.familyMode}>
@@ -863,7 +862,7 @@ export default function DiscoverScreen() {
               </View>
             </View>
             <Text style={styles.matchBody}>
-              This connection now lives in Connections, where you can start chatting or keep browsing first.
+              This match now lives in Matches, where you can jump into chat or keep browsing first.
             </Text>
             <View style={styles.matchActions}>
               <View style={styles.flex}>
@@ -871,10 +870,10 @@ export default function DiscoverScreen() {
               </View>
               <View style={styles.flex}>
                 <Button
-                  label="Open connections"
+                  label="Open matches"
                   onPress={() => {
                     setMatchOverlayParentId(null);
-                    router.push('/(tabs)/connections');
+                    router.push('/(tabs)/matches');
                   }}
                 />
               </View>

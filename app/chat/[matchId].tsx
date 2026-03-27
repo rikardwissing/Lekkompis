@@ -132,12 +132,12 @@ export default function ChatScreen() {
 
   if (!matchFamily) {
     return (
-      <Screen header={<SubscreenHeader fallbackHref="/conversations" title="Conversation" />}>
+      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/inbox" title="Conversation" />}>
         <EmptyState
           title="Chat not found"
           body="This conversation is not available in the demo right now, so we kept you from landing in the wrong thread."
-          actionLabel="Back to conversations"
-          onAction={() => router.replace('/conversations')}
+          actionLabel="Back to inbox"
+          onAction={() => router.replace('/(tabs)/inbox')}
         />
       </Screen>
     );
@@ -145,16 +145,16 @@ export default function ChatScreen() {
 
   if (!canAccessDirectChat) {
     return (
-      <Screen header={<SubscreenHeader fallbackHref="/conversations" title="Conversation" />}>
+      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/inbox" title="Conversation" />}>
         <EmptyState
           title={linkedParentHasConnection ? 'Add this connection to your account first' : 'Direct chat not available yet'}
           body={
             linkedParentHasConnection
-              ? `${matchParent?.firstName ?? 'This parent'} is already connected with another linked parent in your family. Add them from Connections to join the one-to-one thread as ${activeParent?.firstName ?? 'yourself'}.`
+              ? `${matchParent?.firstName ?? 'This parent'} is already connected with another linked parent in your family. Add them from Matches to join the one-to-one thread as ${activeParent?.firstName ?? 'yourself'}.`
               : 'Once you have a direct match with this parent, the conversation will open here.'
           }
-          actionLabel="Open connections"
-          onAction={() => router.replace('/(tabs)/connections')}
+          actionLabel="Open matches"
+          onAction={() => router.replace('/(tabs)/matches')}
         />
       </Screen>
     );
@@ -184,7 +184,7 @@ export default function ChatScreen() {
   return (
     <Screen
       contentStyle={styles.screenContent}
-      header={<SubscreenHeader fallbackHref="/conversations" title={matchParent?.firstName ?? 'Conversation'} />}
+      header={<SubscreenHeader fallbackHref="/(tabs)/inbox" title={matchParent?.firstName ?? 'Conversation'} />}
     >
       <ChatThread
         attachmentSummaryLabel={

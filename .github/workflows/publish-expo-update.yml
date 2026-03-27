@@ -95,12 +95,6 @@ jobs:
           comment: false
           qr-target: expo-go
 
-      - name: Build Expo Go deep link
-        id: expo-go-link
-        run: |
-          expo_go_link="$(echo "${{ steps.preview.outputs.link }}" | sed 's#^https://#exp://#')"
-          echo "url=$expo_go_link" >> "$GITHUB_OUTPUT"
-
       - name: Comment preview links on PR
         uses: actions/github-script@v7
         with:
@@ -110,7 +104,8 @@ jobs:
             const body = `${marker}
             ## Expo Preview
 
-            - **Open in Expo Go:** [${{ steps.expo-go-link.outputs.url }}](${{ steps.expo-go-link.outputs.url }})
+            - **Open in Expo Go (iOS):** [${{ steps.preview.outputs.iosLink }}](${{ steps.preview.outputs.iosLink }})
+            - **Open in Expo Go (Android):** [${{ steps.preview.outputs.androidLink }}](${{ steps.preview.outputs.androidLink }})
             - **Expo dashboard link:** [${{ steps.preview.outputs.link }}](${{ steps.preview.outputs.link }})
             - **QR code:** ${{ steps.preview.outputs.qr }}
             `;

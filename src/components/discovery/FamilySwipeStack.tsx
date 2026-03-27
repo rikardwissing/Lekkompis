@@ -2,6 +2,7 @@ import { forwardRef, type ReactNode, useCallback, useEffect, useImperativeHandle
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  cancelAnimation,
   Easing,
   Extrapolation,
   interpolate,
@@ -9,6 +10,8 @@ import Animated, {
   runOnUI,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
+  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -25,6 +28,8 @@ const BACK_TRANSLATE_Y = 18;
 const BACK_OPACITY = 0.26;
 const SWIPE_OUT_MULTIPLIER = 1.15;
 const IMPERATIVE_SWIPE_Y = 8;
+const IDLE_CUE_DELAY_MS = 2800;
+const IDLE_CUE_DISTANCE = 18;
 const SPRING_CONFIG = {
   damping: 18,
   mass: 0.9,
@@ -83,7 +88,9 @@ export const FamilySwipeStack = forwardRef<FamilySwipeStackHandle, FamilySwipeSt
     const dragProgress = useSharedValue(0);
     const pendingDirection = useSharedValue(0);
     const isAnimating = useSharedValue(false);
+    const isIdleCueAnimating = useSharedValue(false);
     const pendingDecisionRef = useRef<{ decision: FamilySwipeStackDecision; familyId: string } | null>(null);
+    const idleCueTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const topItem = items[0] ?? null;
     const middleItem = items[1] ?? null;
@@ -105,8 +112,70 @@ export const FamilySwipeStack = forwardRef<FamilySwipeStackHandle, FamilySwipeSt
         dragProgress.value = 0;
         pendingDirection.value = 0;
         isAnimating.value = false;
+        isIdleCueAnimating.value = false;
       }
-    }, [dragProgress, dragX, dragY, isAnimating, pendingDirection, topItem?.id]);
+    }, [dragProgress, dragX, dragY, isAnimating, isIdleCueAnimating, pendingDirection, topItem?.id]);
+
+    const clearIdleCueTimeout = useCallback(() => {
+      if (idleCueTimeoutRef.current) {
+        clearTimeout(idleCueTimeoutRef.current);
+        idleCueTimeoutRef.current = null;
+      }
+    }, []);
+
+    const playIdleCue = useCallback(() => {
+      runOnUI(() => {
+        'worklet';
+        if (isAnimating.value || isIdleCueAnimating.value || pendingDirection.value !== 0) {
+          return;
+        }
+
+        isIdleCueAnimating.value = true;
+        cancelAnimation(dragX);
+        cancelAnimation(dragY);
+        cancelAnimation(dragProgress);
+        dragY.value = 0;
+        pendingDirection.value = 1;
+        dragX.value = withDelay(
+          120,
+          withSequence(
+            withTiming(IDLE_CUE_DISTANCE, { duration: 220, easing: Easing.out(Easing.cubic) }),
+            withTiming(-IDLE_CUE_DISTANCE * 0.55, { duration: 260, easing: Easing.inOut(Easing.cubic) }),
+            withTiming(0, { duration: 240, easing: Easing.out(Easing.cubic) }, (finished) => {
+              if (finished) {
+                pendingDirection.value = 0;
+                isIdleCueAnimating.value = false;
+              }
+            })
+          )
+        );
+        dragProgress.value = withDelay(
+          120,
+          withSequence(
+            withTiming(0.26, { duration: 220, easing: Easing.out(Easing.cubic) }),
+            withTiming(0.2, { duration: 260, easing: Easing.inOut(Easing.cubic) }),
+            withTiming(0, { duration: 240, easing: Easing.out(Easing.cubic) })
+          )
+        );
+      })();
+    }, [dragProgress, dragX, dragY, isAnimating, isIdleCueAnimating, pendingDirection]);
+
+    const scheduleIdleCue = useCallback(() => {
+      clearIdleCueTimeout();
+      if (disabled || !topItem) {
+        return;
+      }
+
+      idleCueTimeoutRef.current = setTimeout(() => {
+        playIdleCue();
+        scheduleIdleCue();
+      }, IDLE_CUE_DELAY_MS);
+    }, [clearIdleCueTimeout, disabled, playIdleCue, topItem]);
+
+    useEffect(() => {
+      scheduleIdleCue();
+      return clearIdleCueTimeout;
+    }, [clearIdleCueTimeout, scheduleIdleCue]);
 
     const handleDismissFinished = useCallback(
       (familyId: string, decision: FamilySwipeStackDecision) => {
@@ -215,8 +284,9 @@ export const FamilySwipeStack = forwardRef<FamilySwipeStackHandle, FamilySwipeSt
             dragX.value = withSpring(0, SPRING_CONFIG);
             dragY.value = withSpring(0, SPRING_CONFIG);
             dragProgress.value = withSpring(0, SPRING_CONFIG);
+            runOnJS(scheduleIdleCue)();
           }),
-      [disabled, dragProgress, dragX, dragY, isAnimating, pendingDirection, startDismiss, swipeThreshold, topItem]
+      [disabled, dragProgress, dragX, dragY, isAnimating, pendingDirection, scheduleIdleCue, startDismiss, swipeThreshold, topItem]
     );
 
     const topCardStyle = useAnimatedStyle(() => {

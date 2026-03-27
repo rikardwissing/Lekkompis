@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    paddingBottom: 116,
+    paddingBottom: spacing.xl,
   },
   identityRow: {
     flexDirection: 'row',

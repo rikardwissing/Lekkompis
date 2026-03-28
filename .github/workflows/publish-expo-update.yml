@@ -103,7 +103,14 @@ jobs:
             const marker = '<!-- expo-preview-link -->';
             const expoGoLink = `${{ steps.preview.outputs.link }}`.replace(/^https:\/\//, 'exp://');
             const pagesHost = `${context.repo.owner.toLowerCase()}.github.io`;
-            const expoGoRedirectLink = `https://${pagesHost}/${context.repo.repo}/expo-go-redirect?target=${encodeURIComponent(expoGoLink)}`;
+
+            let expoGoRedirectLink = `https://${pagesHost}/${context.repo.repo}/expo-go-redirect?target=${encodeURIComponent(expoGoLink)}`;
+            const updateMatch = expoGoLink.match(/^exp:\/\/u\.expo\.dev\/([^/?#]+)\/updates\/([^/?#]+)/);
+            if (updateMatch) {
+              const [, projectId, groupId] = updateMatch;
+              expoGoRedirectLink = `https://${pagesHost}/${context.repo.repo}/expo-go-redirect?project=${encodeURIComponent(projectId)}&group=${encodeURIComponent(groupId)}`;
+            }
+
             const body = `${marker}
             ## Expo Preview
 

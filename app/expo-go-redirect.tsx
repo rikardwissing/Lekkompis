@@ -6,18 +6,24 @@ const getTargetFromWindow = () => {
     return null;
   }
 
-  return new URLSearchParams(window.location.search).get('target');
+  const params = new URLSearchParams(window.location.search);
+  const projectId = params.get('project');
+  const groupId = params.get('group');
+
+  if (projectId && groupId) {
+    return `exp://u.expo.dev/${projectId}/group/${groupId}`;
+  }
+
+  const target = params.get('target');
+  if (!target) {
+    return null;
+  }
+
+  return target.replace('/updates/', '/group/');
 };
 
 export default function ExpoGoRedirectScreen() {
-  const target = useMemo(() => {
-    const currentTarget = getTargetFromWindow();
-    if (!currentTarget) {
-      return null;
-    }
-
-    return currentTarget.replace('/updates/', '/group/');
-  }, []);
+  const target = useMemo(() => getTargetFromWindow(), []);
 
   useEffect(() => {
     if (!target || typeof window === 'undefined') {
@@ -39,7 +45,7 @@ export default function ExpoGoRedirectScreen() {
       {target ? (
         <Text style={styles.subtitle}>If nothing happens, go back and try again.</Text>
       ) : (
-        <Text style={styles.subtitle}>Missing target URL parameter.</Text>
+        <Text style={styles.subtitle}>Missing preview parameters.</Text>
       )}
     </View>
   );

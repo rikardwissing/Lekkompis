@@ -10,7 +10,14 @@ const getTargetFromWindow = () => {
 };
 
 export default function ExpoGoRedirectScreen() {
-  const target = useMemo(() => getTargetFromWindow(), []);
+  const target = useMemo(() => {
+    const currentTarget = getTargetFromWindow();
+    if (!currentTarget) {
+      return null;
+    }
+
+    return currentTarget.replace('/updates/', '/group/');
+  }, []);
 
   useEffect(() => {
     if (!target || typeof window === 'undefined') {

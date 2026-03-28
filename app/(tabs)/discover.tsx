@@ -317,11 +317,9 @@ export default function DiscoverScreen() {
     publicEventFilters.selectedActivityTags.length;
 
   const filterButtonDisabled =
-    mode !== 'families' ||
-    decisionPending ||
-    showFamilyFilters ||
-    Boolean(detailParentId) ||
-    Boolean(matchOverlayParentId);
+    mode === 'families'
+      ? decisionPending || showFamilyFilters || Boolean(detailParentId) || Boolean(matchOverlayParentId)
+      : false;
 
   useEffect(() => {
     if (mode !== 'families') {
@@ -432,21 +430,13 @@ export default function DiscoverScreen() {
       showsVerticalScrollIndicator={false}
     >
       <Card>
-        <Chip label="Public events are shared with co-parents" />
+        <Chip label="Events are shared with co-parents" />
 
-        <View style={styles.filterHeader}>
-          <View style={styles.filterHeaderText}>
-            <Text style={styles.filterTitle}>Public event discovery</Text>
-            <Text style={styles.filterSubtitle}>
-              {publicEventFilterCount === 0
-                ? `${visiblePublicEvents.length} public events are currently discoverable nearby.`
-                : `${visiblePublicEvents.length} public events match ${publicEventFilterCount} active filter${publicEventFilterCount === 1 ? '' : 's'}.`}
-            </Text>
-          </View>
-          <Pressable onPress={() => setShowEventFilters((value) => !value)} style={styles.linkButton}>
-            <Text style={styles.linkText}>{showEventFilters ? 'Hide' : 'Edit'}</Text>
-          </Pressable>
-        </View>
+        <Text style={styles.filterSubtitle}>
+          {publicEventFilterCount === 0
+            ? `${visiblePublicEvents.length} events are currently discoverable nearby.`
+            : `${visiblePublicEvents.length} events match ${publicEventFilterCount} active filter${publicEventFilterCount === 1 ? '' : 's'}.`}
+        </Text>
 
         <View style={styles.filters}>
           <Chip label={formatRadiusLabel(publicEventFilters.radiusKm)} />
@@ -603,7 +593,14 @@ export default function DiscoverScreen() {
             accessibilityRole="button"
             accessibilityState={{ disabled: filterButtonDisabled }}
             disabled={filterButtonDisabled}
-            onPress={() => setShowFamilyFilters(true)}
+            onPress={() => {
+              if (mode === 'families') {
+                setShowFamilyFilters(true);
+                return;
+              }
+
+              setShowEventFilters((value) => !value);
+            }}
             style={({ pressed }) => [
               styles.toolbarFilterButton,
               filterButtonDisabled ? styles.disabled : null,
@@ -613,7 +610,13 @@ export default function DiscoverScreen() {
             <Ionicons color={colors.text} name="options-outline" size={16} />
             <Text style={styles.toolbarFilterText}>
               Filters
-              {familyFilterCount > 0 ? ` (${familyFilterCount})` : ''}
+              {mode === 'families'
+                ? familyFilterCount > 0
+                  ? ` (${familyFilterCount})`
+                  : ''
+                : publicEventFilterCount > 0
+                  ? ` (${publicEventFilterCount})`
+                  : ''}
             </Text>
           </Pressable>
         </View>
@@ -865,33 +868,10 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
     gap: spacing.lg,
   },
-  filterHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  filterHeaderText: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  filterTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
   filterSubtitle: {
     fontSize: 14,
     lineHeight: 20,
     color: colors.textMuted,
-  },
-  linkButton: {
-    paddingVertical: spacing.sm,
-  },
-  linkText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.primary,
   },
   filters: {
     flexDirection: 'row',

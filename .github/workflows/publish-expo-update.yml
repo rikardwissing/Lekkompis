@@ -101,10 +101,10 @@ jobs:
           github-token: ${{ github.token }}
           script: |
             const marker = '<!-- expo-preview-link -->';
-            const expoGoLink = `${{ steps.preview.outputs.link }}`.replace(/^https:\/\//, 'exp://');
+            const expoPreviewLink = `${{ steps.preview.outputs.link }}`;
             const pagesHost = `${context.repo.owner.toLowerCase()}.github.io`;
 
-            const updateMatch = expoGoLink.match(/^exp:\/\/u\.expo\.dev\/([^/?#]+)\/(?:updates|group)\/([^/?#]+)/);
+            const updateMatch = expoPreviewLink.match(/^(?:https?:\/\/|exp:\/\/)u\.expo\.dev\/([^/?#]+)\/(?:updates|group)\/([^/?#]+)/);
             const launchLine = updateMatch
               ? `- **Open in Expo Go:** [Launch in Expo Go](https://${pagesHost}/${context.repo.repo}/expo-go-redirect?project=${encodeURIComponent(updateMatch[1])}&group=${encodeURIComponent(updateMatch[2])})`
               : '- **Open in Expo Go:** Unable to parse project/group from preview link.';

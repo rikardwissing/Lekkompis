@@ -38,7 +38,10 @@ export default function ExpoGoRedirectScreen() {
       <ActivityIndicator size="small" />
       <Text style={styles.title}>Opening Expo Go preview…</Text>
       {target ? (
-        <Text style={styles.subtitle}>If nothing happens, go back and try again.</Text>
+        <>
+          <Text style={styles.subtitle}>If nothing happens, go back and try again.</Text>
+          <Text selectable style={styles.linkText}>{target}</Text>
+        </>
       ) : (
         <Text style={styles.subtitle}>Missing preview parameters.</Text>
       )}
@@ -63,5 +66,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     color: '#666',
+  },
+  linkText: {
+    fontSize: 12,
+    textAlign: 'center',
+    color: '#444',
   },
 });

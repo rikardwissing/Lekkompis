@@ -822,6 +822,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -833,6 +834,9 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   filterCountBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
     minWidth: 20,
     height: 20,
     borderRadius: radius.pill,

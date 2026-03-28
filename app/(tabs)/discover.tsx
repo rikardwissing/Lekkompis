@@ -319,7 +319,7 @@ export default function DiscoverScreen() {
   const filterButtonDisabled =
     mode === 'families'
       ? decisionPending || showFamilyFilters || Boolean(detailParentId) || Boolean(matchOverlayParentId)
-      : false;
+      : showEventFilters;
 
   useEffect(() => {
     if (mode !== 'families') {
@@ -329,6 +329,12 @@ export default function DiscoverScreen() {
       setDeckParentIds(parentQueueIds);
     }
   }, [mode, parentQueueIds]);
+
+  useEffect(() => {
+    if (mode !== 'events') {
+      setShowEventFilters(false);
+    }
+  }, [mode]);
 
   useEffect(() => {
     setDeckParentIds((previousIds) => {
@@ -451,77 +457,6 @@ export default function DiscoverScreen() {
           ))}
         </View>
 
-        {showEventFilters ? (
-          <View style={styles.filterPanel}>
-            <View style={styles.filterGroup}>
-              <Text style={styles.groupLabel}>Distance</Text>
-              <View style={styles.filters}>
-                {distanceRadiusOptions.map((radiusKm) => (
-                  <SelectableChip
-                    key={radiusKm === null ? 'any-event-distance' : `event-${radiusKm}-km`}
-                    label={formatRadiusLabel(radiusKm)}
-                    selected={publicEventFilters.radiusKm === radiusKm}
-                    onPress={() => setPublicEventRadius(radiusKm)}
-                  />
-                ))}
-              </View>
-            </View>
-            <View style={styles.filterGroup}>
-              <Text style={styles.groupLabel}>Audience</Text>
-              <View style={styles.filters}>
-                <SelectableChip
-                  label="All events"
-                  selected={publicEventFilters.audience === ANY_PUBLIC_EVENT_AUDIENCE}
-                  onPress={() => setPublicEventAudience(ANY_PUBLIC_EVENT_AUDIENCE)}
-                />
-                <SelectableChip
-                  label="Families with children"
-                  selected={publicEventFilters.audience === 'children'}
-                  onPress={() => setPublicEventAudience('children')}
-                />
-                <SelectableChip
-                  label="Expecting parents"
-                  selected={publicEventFilters.audience === 'expecting'}
-                  onPress={() => setPublicEventAudience('expecting')}
-                />
-              </View>
-            </View>
-            {publicEventFilters.audience === 'children' ? (
-              <View style={styles.filterGroup}>
-                <Text style={styles.groupLabel}>Age range</Text>
-                <View style={styles.filters}>
-                  <SelectableChip
-                    label={ANY_PUBLIC_EVENT_AGE}
-                    selected={publicEventFilters.ageRange === ANY_PUBLIC_EVENT_AGE}
-                    onPress={() => setPublicEventAgeRange(ANY_PUBLIC_EVENT_AGE)}
-                  />
-                  {groupAgeRangeOptions.map((ageRange) => (
-                    <SelectableChip
-                      key={ageRange}
-                      label={ageRange}
-                      selected={publicEventFilters.ageRange === ageRange}
-                      onPress={() => setPublicEventAgeRange(ageRange)}
-                    />
-                  ))}
-                </View>
-              </View>
-            ) : null}
-            <View style={styles.filterGroup}>
-              <Text style={styles.groupLabel}>Activities</Text>
-              <View style={styles.filters}>
-                {eventActivityOptions.map((tag) => (
-                  <SelectableChip
-                    key={tag}
-                    label={tag}
-                    selected={publicEventFilters.selectedActivityTags.includes(tag)}
-                    onPress={() => togglePublicEventActivity(tag)}
-                  />
-                ))}
-              </View>
-            </View>
-            <Button label="Reset filters" variant="secondary" onPress={resetPublicEventFilters} />
-          </View>
-        ) : null}
       </Card>
 
       {visiblePublicEvents.length === 0 ? (
@@ -599,7 +534,7 @@ export default function DiscoverScreen() {
                 return;
               }
 
-              setShowEventFilters((value) => !value);
+              setShowEventFilters(true);
             }}
             style={({ pressed }) => [
               styles.toolbarFilterButton,
@@ -717,6 +652,85 @@ export default function DiscoverScreen() {
           ) : null}
 
           <Button label="Reset filters" variant="secondary" onPress={resetDiscoveryFilters} />
+        </ScrollView>
+      </DiscoveryBottomSheet>
+
+      <DiscoveryBottomSheet
+        onClose={() => setShowEventFilters(false)}
+        title="Event filters"
+        visible={showEventFilters}
+      >
+        <ScrollView
+          contentContainerStyle={styles.sheetContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.filterGroup}>
+            <Text style={styles.groupLabel}>Distance</Text>
+            <View style={styles.filters}>
+              {distanceRadiusOptions.map((radiusKm) => (
+                <SelectableChip
+                  key={radiusKm === null ? 'any-event-distance' : `event-${radiusKm}-km`}
+                  label={formatRadiusLabel(radiusKm)}
+                  selected={publicEventFilters.radiusKm === radiusKm}
+                  onPress={() => setPublicEventRadius(radiusKm)}
+                />
+              ))}
+            </View>
+          </View>
+          <View style={styles.filterGroup}>
+            <Text style={styles.groupLabel}>Audience</Text>
+            <View style={styles.filters}>
+              <SelectableChip
+                label="All events"
+                selected={publicEventFilters.audience === ANY_PUBLIC_EVENT_AUDIENCE}
+                onPress={() => setPublicEventAudience(ANY_PUBLIC_EVENT_AUDIENCE)}
+              />
+              <SelectableChip
+                label="Families with children"
+                selected={publicEventFilters.audience === 'children'}
+                onPress={() => setPublicEventAudience('children')}
+              />
+              <SelectableChip
+                label="Expecting parents"
+                selected={publicEventFilters.audience === 'expecting'}
+                onPress={() => setPublicEventAudience('expecting')}
+              />
+            </View>
+          </View>
+          {publicEventFilters.audience === 'children' ? (
+            <View style={styles.filterGroup}>
+              <Text style={styles.groupLabel}>Age range</Text>
+              <View style={styles.filters}>
+                <SelectableChip
+                  label={ANY_PUBLIC_EVENT_AGE}
+                  selected={publicEventFilters.ageRange === ANY_PUBLIC_EVENT_AGE}
+                  onPress={() => setPublicEventAgeRange(ANY_PUBLIC_EVENT_AGE)}
+                />
+                {groupAgeRangeOptions.map((ageRange) => (
+                  <SelectableChip
+                    key={ageRange}
+                    label={ageRange}
+                    selected={publicEventFilters.ageRange === ageRange}
+                    onPress={() => setPublicEventAgeRange(ageRange)}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
+          <View style={styles.filterGroup}>
+            <Text style={styles.groupLabel}>Activities</Text>
+            <View style={styles.filters}>
+              {eventActivityOptions.map((tag) => (
+                <SelectableChip
+                  key={tag}
+                  label={tag}
+                  selected={publicEventFilters.selectedActivityTags.includes(tag)}
+                  onPress={() => togglePublicEventActivity(tag)}
+                />
+              ))}
+            </View>
+          </View>
+          <Button label="Reset filters" variant="secondary" onPress={resetPublicEventFilters} />
         </ScrollView>
       </DiscoveryBottomSheet>
 

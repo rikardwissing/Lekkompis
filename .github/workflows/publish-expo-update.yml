@@ -104,9 +104,8 @@ jobs:
             const pagesHost = `${context.repo.owner.toLowerCase()}.github.io`;
             const projectParam = `${{ steps.preview.outputs.projectId || steps.preview.outputs.projectSlug }}`;
             const groupParam = `${{ steps.preview.outputs.groupId }}`;
-            const targetParam = `${{ steps.preview.outputs.link }}`;
             const launchLine = projectParam && groupParam
-              ? `- **Open in Expo Go:** [Launch in Expo Go](https://${pagesHost}/${context.repo.repo}/expo-go-redirect?project=${encodeURIComponent(projectParam)}&group=${encodeURIComponent(groupParam)}&target=${encodeURIComponent(targetParam)})`
+              ? `- **Open in Expo Go:** [Launch in Expo Go](https://${pagesHost}/${context.repo.repo}/expo-go-redirect?project=${encodeURIComponent(projectParam)}&group=${encodeURIComponent(groupParam)})`
               : '- **Open in Expo Go:** Missing project/group from preview outputs.';
 
             const body = `${marker}

@@ -101,13 +101,17 @@ jobs:
           github-token: ${{ github.token }}
           script: |
             const marker = '<!-- expo-preview-link -->';
-            const expoGoLink = `${{ steps.preview.outputs.link }}`.replace(/^https:\/\//, 'exp://');
             const pagesHost = `${context.repo.owner.toLowerCase()}.github.io`;
-            const expoGoRedirectLink = `https://${pagesHost}/${context.repo.repo}/expo-go-redirect?target=${encodeURIComponent(expoGoLink)}`;
+            const projectParam = `${{ steps.preview.outputs.projectId || steps.preview.outputs.projectSlug }}`;
+            const groupParam = `${{ steps.preview.outputs.groupId }}`;
+            const launchLine = projectParam && groupParam
+              ? `- **Open in Expo Go:** [Launch in Expo Go](https://${pagesHost}/${context.repo.repo}/expo-go-redirect?project=${encodeURIComponent(projectParam)}&group=${encodeURIComponent(groupParam)})`
+              : '- **Open in Expo Go:** Missing project/group from preview outputs.';
+
             const body = `${marker}
             ## Expo Preview
 
-            - **Open in Expo Go:** [Launch in Expo Go](${expoGoRedirectLink})
+            ${launchLine}
             - **Expo dashboard:** [Open update page](${{ steps.preview.outputs.link }})
             - **QR code image:**
               ![Expo preview QR code](${{ steps.preview.outputs.qr }})

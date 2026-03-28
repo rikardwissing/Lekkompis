@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useMemo } from 'react';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useAppStore } from '@/store/app-store';
@@ -71,23 +72,23 @@ export default function TabsLayout() {
       tintColor="#60a5fa"
     >
       <NativeTabs.Trigger name="discover">
-        <NativeTabs.Trigger.Icon md="explore" sf={{ default: 'house', selected: 'house.fill' }} />
+        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} src={{ default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="home-outline" />, selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="home" /> }} />
         <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="matches">
-        <NativeTabs.Trigger.Icon md="favorite" sf={{ default: 'heart', selected: 'heart.fill' }} />
+        <NativeTabs.Trigger.Icon sf={{ default: 'heart', selected: 'heart.fill' }} src={{ default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="heart-outline" />, selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="heart" /> }} />
         <NativeTabs.Trigger.Label>Matches</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="inbox">
-        <NativeTabs.Trigger.Icon md="chat" sf={{ default: 'paperplane', selected: 'paperplane.fill' }} />
+        <NativeTabs.Trigger.Icon sf={{ default: 'paperplane', selected: 'paperplane.fill' }} src={{ default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="chatbubble-ellipses-outline" />, selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="chatbubble-ellipses" /> }} />
         <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
         <TabBadge count={unreadConversationCount} />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="groups">
-        <NativeTabs.Trigger.Icon md="groups" sf={{ default: 'person.2', selected: 'person.2.fill' }} />
+        <NativeTabs.Trigger.Icon sf={{ default: 'person.2', selected: 'person.2.fill' }} src={{ default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="people-outline" />, selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="people" /> }} />
         <NativeTabs.Trigger.Label>Groups</NativeTabs.Trigger.Label>
         <TabBadge count={groupAttentionCount} />
       </NativeTabs.Trigger>

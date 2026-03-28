@@ -1,14 +1,15 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 import { glass } from '@/theme/glass';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 
 export function Chip({ label }: { label: string }) {
   return (
-    <View style={styles.chip}>
+    <GlassSurface glassEffectStyle="clear" style={styles.chip}>
       <Text style={styles.text}>{label}</Text>
-    </View>
+    </GlassSurface>
   );
 }
 

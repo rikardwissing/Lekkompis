@@ -6,6 +6,7 @@ import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 import { glass } from '@/theme/glass';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 
 type MainAppHeaderProps = {
   showProfileAction?: boolean;
@@ -32,8 +33,10 @@ export function MainAppHeader({ showProfileAction = false, title, titleOpacity }
           accessibilityRole="button"
           onPress={() => router.push('/(tabs)/me')}
           style={({ pressed }) => [styles.avatarAction, pressed ? styles.pressed : null]}
-        >
-          <Avatar name={activeParent?.firstName ?? 'Parent'} imageUrl={activeParent?.avatarUrl} size={42} />
+>
+          <GlassSurface glassEffectStyle="clear" style={styles.avatarGlass}>
+            <Avatar name={activeParent?.firstName ?? 'Parent'} imageUrl={activeParent?.avatarUrl} size={42} />
+          </GlassSurface>
         </Pressable>
       ) : (
         <View style={styles.sideSpacer} />
@@ -62,6 +65,10 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   avatarAction: {
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
+  avatarGlass: {
     borderRadius: radius.pill,
     ...glass.panel,
     padding: spacing.xs,

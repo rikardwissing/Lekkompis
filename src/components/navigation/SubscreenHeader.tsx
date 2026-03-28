@@ -4,6 +4,7 @@ import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { glass } from '@/theme/glass';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 
 type SubscreenHeaderProps = {
   fallbackHref: Href;
@@ -34,7 +35,9 @@ export function SubscreenHeader({ fallbackHref, title, titleOpacity }: Subscreen
         onPress={handleBack}
         style={({ pressed }) => [styles.backAction, pressed ? styles.pressed : null]}
       >
-        <Ionicons color={colors.primary} name="chevron-back" size={20} />
+        <GlassSurface glassEffectStyle="clear" style={styles.backGlass}>
+          <Ionicons color={colors.primary} name="chevron-back" size={20} />
+        </GlassSurface>
       </Pressable>
       <View style={styles.rightSpacer} />
     </View>
@@ -61,6 +64,11 @@ const styles = StyleSheet.create({
   backAction: {
     width: 42,
     height: 42,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
+  backGlass: {
+    flex: 1,
     borderRadius: radius.pill,
     ...glass.panel,
     alignItems: 'center',

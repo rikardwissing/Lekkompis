@@ -4,6 +4,7 @@ import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 import { glass } from '@/theme/glass';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 import {
   getPrivateLocationLabel,
   getPublicLocationLabel,
@@ -52,19 +53,21 @@ export function LocationField({
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput
-        onChangeText={(nextValue) => {
-          setQuery(nextValue);
+      <GlassSurface glassEffectStyle="clear" style={styles.inputShell}>
+        <TextInput
+          onChangeText={(nextValue) => {
+            setQuery(nextValue);
 
-          if (value && nextValue !== valueFormatter(value)) {
-            onChange(null);
-          }
-        }}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        style={styles.input}
-        value={query}
-      />
+            if (value && nextValue !== valueFormatter(value)) {
+              onChange(null);
+            }
+          }}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          style={styles.input}
+          value={query}
+        />
+      </GlassSurface>
       <View style={styles.suggestionList}>
         {filteredSuggestions.map((location) => {
           const selected = value?.id === location.id;
@@ -77,14 +80,12 @@ export function LocationField({
                 setQuery(valueFormatter(location));
                 onChange(location);
               }}
-              style={({ pressed }) => [
-                styles.suggestionCard,
-                selected ? styles.suggestionCardSelected : null,
-                pressed ? styles.pressed : null,
-              ]}
+              style={({ pressed }) => [styles.suggestionPressable, pressed ? styles.pressed : null]}
             >
-              <Text style={styles.suggestionTitle}>{suggestionTitleFormatter(location)}</Text>
-              <Text style={styles.suggestionMeta}>{suggestionMetaFormatter(location)}</Text>
+              <GlassSurface glassEffectStyle="clear" style={[styles.suggestionCard, selected ? styles.suggestionCardSelected : null]}>
+                <Text style={styles.suggestionTitle}>{suggestionTitleFormatter(location)}</Text>
+                <Text style={styles.suggestionMeta}>{suggestionMetaFormatter(location)}</Text>
+              </GlassSurface>
             </Pressable>
           );
         })}
@@ -103,16 +104,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textMuted,
   },
-  input: {
+  inputShell: {
     minHeight: 52,
     borderRadius: radius.md,
     ...glass.panel,
+    justifyContent: 'center',
+  },
+  input: {
+    minHeight: 52,
     paddingHorizontal: spacing.md,
     color: colors.text,
     fontSize: 16,
   },
   suggestionList: {
     gap: spacing.sm,
+  },
+  suggestionPressable: {
+    borderRadius: radius.md,
+    overflow: 'hidden',
   },
   suggestionCard: {
     borderRadius: radius.md,

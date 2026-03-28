@@ -3,6 +3,7 @@ import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 import { glass } from '@/theme/glass';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 
 export function SelectableChip({
   label,
@@ -20,7 +21,13 @@ export function SelectableChip({
       onPress={onPress}
       style={({ pressed }) => [styles.base, selected ? styles.selected : styles.unselected, pressed ? styles.pressed : null]}
     >
-      <Text style={[styles.text, selected ? styles.selectedText : styles.unselectedText]}>{label}</Text>
+      {selected ? (
+        <Text style={[styles.text, styles.selectedText]}>{label}</Text>
+      ) : (
+        <GlassSurface glassEffectStyle="clear" style={styles.unselectedSurface}>
+          <Text style={[styles.text, styles.unselectedText]}>{label}</Text>
+        </GlassSurface>
+      )}
     </Pressable>
   );
 }
@@ -28,16 +35,21 @@ export function SelectableChip({
 const styles = StyleSheet.create({
   base: {
     borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
+    overflow: 'hidden',
   },
   selected: {
     backgroundColor: colors.primarySoft,
     borderColor: colors.primary,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
-  unselected: {
+  unselected: {},
+  unselectedSurface: {
     ...glass.panelMuted,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   text: {
     fontSize: 13,

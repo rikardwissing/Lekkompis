@@ -1,11 +1,12 @@
 import { PropsWithChildren } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 import { glass } from '@/theme/glass';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 
 export function Card({ children }: PropsWithChildren) {
-  return <View style={styles.card}>{children}</View>;
+  return <GlassSurface style={styles.card}>{children}</GlassSurface>;
 }
 
 const styles = StyleSheet.create({

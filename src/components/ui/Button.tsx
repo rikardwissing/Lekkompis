@@ -1,9 +1,10 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import { colors } from '@/theme/colors';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 import { glass } from '@/theme/glass';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 
 type ButtonProps = {
   label: string;
@@ -26,9 +27,9 @@ export function Button({ label, variant = 'primary', onPress, disabled = false }
           <Text style={[styles.text, styles.primaryText]}>{label}</Text>
         </LinearGradient>
       ) : (
-        <View style={[styles.fill, styles.secondary]}>
+        <GlassSurface glassEffectStyle="clear" style={[styles.fill, styles.secondary]}>
           <Text style={[styles.text, styles.secondaryText]}>{label}</Text>
-        </View>
+        </GlassSurface>
       )}
     </Pressable>
   );

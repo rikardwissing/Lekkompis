@@ -20,8 +20,6 @@ import {
 import { PublicEventCard } from '@/components/discovery/PublicEventCard';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { SelectableChip } from '@/components/ui/SelectableChip';
@@ -435,30 +433,6 @@ export default function DiscoverScreen() {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      <Card>
-        <Chip label="Events are shared with co-parents" />
-
-        <Text style={styles.filterSubtitle}>
-          {publicEventFilterCount === 0
-            ? `${visiblePublicEvents.length} events are currently discoverable nearby.`
-            : `${visiblePublicEvents.length} events match ${publicEventFilterCount} active filter${publicEventFilterCount === 1 ? '' : 's'}.`}
-        </Text>
-
-        <View style={styles.filters}>
-          <Chip label={formatRadiusLabel(publicEventFilters.radiusKm)} />
-          {publicEventFilters.audience !== ANY_PUBLIC_EVENT_AUDIENCE ? (
-            <Chip label={publicEventFilters.audience === 'expecting' ? 'Expecting parents' : 'Families with children'} />
-          ) : null}
-          {publicEventFilters.audience === 'children' && publicEventFilters.ageRange !== ANY_PUBLIC_EVENT_AGE ? (
-            <Chip label={publicEventFilters.ageRange} />
-          ) : null}
-          {publicEventFilters.selectedActivityTags.map((tag) => (
-            <Chip key={tag} label={tag} />
-          ))}
-        </View>
-
-      </Card>
-
       {visiblePublicEvents.length === 0 ? (
         <EmptyState
           title="No public events match these filters"
@@ -882,18 +856,10 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
     gap: spacing.lg,
   },
-  filterSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textMuted,
-  },
   filters: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-  },
-  filterPanel: {
-    gap: spacing.lg,
   },
   filterGroup: {
     gap: spacing.sm,

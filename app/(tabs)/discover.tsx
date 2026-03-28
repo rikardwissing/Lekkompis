@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Pressable,
   ScrollView,
@@ -147,6 +148,7 @@ export default function DiscoverScreen() {
   const [decisionPending, setDecisionPending] = useState(false);
   const [matchOverlayParentId, setMatchOverlayParentId] = useState<string | null>(null);
   const stackRef = useRef<FamilySwipeStackHandle | null>(null);
+  const insets = useSafeAreaInsets();
   const currentFamilyId = useAppStore((state) => state.currentFamilyId);
   const families = useAppStore((state) => state.families);
   const likedParentIdsByParent = useAppStore((state) => state.likedParentIdsByParent);
@@ -176,6 +178,7 @@ export default function DiscoverScreen() {
   const passedParentIds = getActivePassedParentIds(draftProfile, passedParentIdsByParent);
 
   const draftChildren = draftProfile.children ?? [];
+  const bottomTabSpacing = Math.max(insets.bottom, spacing.sm) + spacing.xl;
   const similarAgeOnly = discoveryFilters.similarAgeOnly ?? false;
   const hasDraftChildren = hasBornChildren(draftProfile);
   const showChildDiscoveryControls = hasDraftChildren && discoveryFilters.familyStage === 'all';
@@ -460,7 +463,7 @@ export default function DiscoverScreen() {
 
   const renderEventsMode = () => (
     <ScrollView
-      contentContainerStyle={styles.eventsScrollContent}
+      contentContainerStyle={[styles.eventsScrollContent, { paddingBottom: bottomTabSpacing }]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
@@ -625,7 +628,7 @@ export default function DiscoverScreen() {
       <View style={styles.root}>
         {mode === 'families' ? (
           <View style={styles.familyMode}>
-            <View style={styles.deckArea}>
+            <View style={[styles.deckArea, { paddingBottom: bottomTabSpacing }]}>
               <FamilySwipeStack
                 ref={stackRef}
                 disabled={decisionPending || showFamilyFilters || Boolean(detailParentId) || Boolean(matchOverlayParentId)}

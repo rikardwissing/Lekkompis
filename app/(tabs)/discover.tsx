@@ -102,42 +102,6 @@ function SegmentButton({
   );
 }
 
-function OverlayIconButton({
-  accessibilityLabel,
-  badgeCount,
-  disabled = false,
-  iconName,
-  onPress,
-}: {
-  accessibilityLabel: string;
-  badgeCount?: number;
-  disabled?: boolean;
-  iconName: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.overlayIconButton,
-        disabled ? styles.disabled : null,
-        pressed && !disabled ? styles.pressed : null,
-      ]}
-    >
-      <Ionicons color={colors.surface} name={iconName} size={18} />
-      {badgeCount && badgeCount > 0 ? (
-        <View style={styles.overlayBadge}>
-          <Text style={styles.overlayBadgeText}>{badgeCount}</Text>
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
-
 export default function DiscoverScreen() {
   const [mode, setMode] = useState<DiscoverMode>('families');
   const [showFamilyFilters, setShowFamilyFilters] = useState(false);
@@ -352,9 +316,12 @@ export default function DiscoverScreen() {
     (publicEventFilters.audience === 'children' && publicEventFilters.ageRange !== ANY_PUBLIC_EVENT_AGE ? 1 : 0) +
     publicEventFilters.selectedActivityTags.length;
 
-  const filterButtonDisabled = decisionPending || Boolean(detailParentId) || Boolean(matchOverlayParentId);
-  const moreButtonDisabled =
-    !activeParentEntry || decisionPending || showFamilyFilters || Boolean(detailParentId) || Boolean(matchOverlayParentId);
+  const filterButtonDisabled =
+    mode !== 'families' ||
+    decisionPending ||
+    showFamilyFilters ||
+    Boolean(detailParentId) ||
+    Boolean(matchOverlayParentId);
 
   useEffect(() => {
     if (mode !== 'families') {
@@ -623,6 +590,34 @@ export default function DiscoverScreen() {
   return (
     <Screen contentStyle={styles.screenContent} edges={['top', 'left', 'right']}>
       <View style={styles.root}>
+        <View style={styles.toolbarRow}>
+          <View style={styles.modeSwitchShell}>
+            <View style={styles.segmentRow}>
+              <SegmentButton active={mode === 'families'} label="Parents" onPress={() => setMode('families')} />
+              <SegmentButton active={mode === 'events'} label="Events" onPress={() => setMode('events')} />
+            </View>
+          </View>
+
+          <Pressable
+            accessibilityLabel="Open discovery filters"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: filterButtonDisabled }}
+            disabled={filterButtonDisabled}
+            onPress={() => setShowFamilyFilters(true)}
+            style={({ pressed }) => [
+              styles.toolbarFilterButton,
+              filterButtonDisabled ? styles.disabled : null,
+              pressed && !filterButtonDisabled ? styles.pressed : null,
+            ]}
+          >
+            <Ionicons color={colors.text} name="options-outline" size={16} />
+            <Text style={styles.toolbarFilterText}>
+              Filters
+              {familyFilterCount > 0 ? ` (${familyFilterCount})` : ''}
+            </Text>
+          </Pressable>
+        </View>
+
         {mode === 'families' ? (
           <View style={styles.familyMode}>
             <View style={styles.deckArea}>
@@ -639,39 +634,6 @@ export default function DiscoverScreen() {
         ) : (
           renderEventsMode()
         )}
-
-        <View pointerEvents="box-none" style={styles.topOverlay}>
-          {mode === 'families' ? (
-            <OverlayIconButton
-              accessibilityLabel="Open discovery filters"
-              badgeCount={familyFilterCount}
-              disabled={filterButtonDisabled}
-              iconName="options-outline"
-              onPress={() => setShowFamilyFilters(true)}
-            />
-          ) : (
-            <View style={styles.overlaySideSpacer} />
-          )}
-
-          <View style={styles.modeSwitchShell}>
-            <View style={styles.segmentRow}>
-              <SegmentButton active={mode === 'families'} label="Parents" onPress={() => setMode('families')} />
-              <SegmentButton active={mode === 'events'} label="Events" onPress={() => setMode('events')} />
-            </View>
-          </View>
-
-          {mode === 'families' ? (
-            <OverlayIconButton
-              accessibilityLabel={activeParentEntry ? `Open more information about ${activeParentEntry.parent.firstName}` : 'Open more information'}
-              disabled={moreButtonDisabled}
-              iconName="ellipsis-horizontal"
-              onPress={() => setDetailParentId(activeParentEntry?.parent.id ?? null)}
-            />
-          ) : (
-            <View style={styles.overlaySideSpacer} />
-          )}
-        </View>
-
       </View>
 
       <DiscoveryBottomSheet
@@ -819,21 +781,15 @@ const styles = StyleSheet.create({
   },
   root: {
     flex: 1,
-  },
-  topOverlay: {
-    position: 'absolute',
-    top: spacing.md,
-    left: spacing.lg,
-    right: spacing.lg,
-    zIndex: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingTop: spacing.md,
     gap: spacing.md,
   },
-  overlaySideSpacer: {
-    width: 48,
-    height: 48,
+  toolbarRow: {
+    paddingHorizontal: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
   },
   modeSwitchShell: {
     flex: 1,
@@ -843,7 +799,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
     width: '100%',
-    maxWidth: 250,
+    maxWidth: 280,
     padding: spacing.xs,
     borderRadius: radius.pill,
     backgroundColor: 'rgba(255,255,255,0.94)',
@@ -871,37 +827,22 @@ const styles = StyleSheet.create({
   segmentButtonTextActive: {
     color: colors.surface,
   },
-  overlayIconButton: {
-    width: 48,
-    height: 48,
+  toolbarFilterButton: {
+    height: 44,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    backgroundColor: 'rgba(18,24,20,0.42)',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
-    elevation: 8,
+    gap: spacing.xs,
   },
-  overlayBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  overlayBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.surface,
+  toolbarFilterText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
   },
   familyMode: {
     flex: 1,
@@ -915,9 +856,11 @@ const styles = StyleSheet.create({
   deckArea: {
     flex: 1,
     minHeight: 0,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   eventsScrollContent: {
-    paddingTop: 88,
+    paddingTop: spacing.sm,
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxxl,
     gap: spacing.lg,

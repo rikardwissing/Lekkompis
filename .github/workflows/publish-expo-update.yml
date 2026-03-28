@@ -104,17 +104,15 @@ jobs:
             const expoGoLink = `${{ steps.preview.outputs.link }}`.replace(/^https:\/\//, 'exp://');
             const pagesHost = `${context.repo.owner.toLowerCase()}.github.io`;
 
-            let expoGoRedirectLink = `https://${pagesHost}/${context.repo.repo}/expo-go-redirect?target=${encodeURIComponent(expoGoLink)}`;
-            const updateMatch = expoGoLink.match(/^exp:\/\/u\.expo\.dev\/([^/?#]+)\/updates\/([^/?#]+)/);
-            if (updateMatch) {
-              const [, projectId, groupId] = updateMatch;
-              expoGoRedirectLink = `https://${pagesHost}/${context.repo.repo}/expo-go-redirect?project=${encodeURIComponent(projectId)}&group=${encodeURIComponent(groupId)}`;
-            }
+            const updateMatch = expoGoLink.match(/^exp:\/\/u\.expo\.dev\/([^/?#]+)\/(?:updates|group)\/([^/?#]+)/);
+            const launchLine = updateMatch
+              ? `- **Open in Expo Go:** [Launch in Expo Go](https://${pagesHost}/${context.repo.repo}/expo-go-redirect?project=${encodeURIComponent(updateMatch[1])}&group=${encodeURIComponent(updateMatch[2])})`
+              : '- **Open in Expo Go:** Unable to parse project/group from preview link.';
 
             const body = `${marker}
             ## Expo Preview
 
-            - **Open in Expo Go:** [Launch in Expo Go](${expoGoRedirectLink})
+            ${launchLine}
             - **Expo dashboard:** [Open update page](${{ steps.preview.outputs.link }})
             - **QR code image:**
               ![Expo preview QR code](${{ steps.preview.outputs.qr }})

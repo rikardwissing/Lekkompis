@@ -1,19 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { ComponentProps } from 'react';
 import { useMemo } from 'react';
-import { Tabs } from 'expo-router';
-import { StyleSheet } from 'react-native';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useAppStore } from '@/store/app-store';
 import { getConversationThreads, getGroupAttentionCount, getUnreadConversationThreadCount } from '@/store/derived';
 import { colors } from '@/theme/colors';
 
-type TabIconName = ComponentProps<typeof Ionicons>['name'];
-
 const formatBadgeCount = (count: number) => (count > 9 ? '9+' : `${count}`);
 
-function renderTabIcon(outlineIcon: TabIconName, filledIcon: TabIconName) {
-  return ({ color, focused, size }: { color: string; focused: boolean; size: number }) => (
-    <Ionicons color={color} name={focused ? filledIcon : outlineIcon} size={size} />
+function InboxBadge({ count }: { count: number }) {
+  return (
+    <NativeTabs.Trigger.Badge hidden={count <= 0}>{count > 0 ? formatBadgeCount(count) : undefined}</NativeTabs.Trigger.Badge>
+  );
+}
+
+function GroupsBadge({ count }: { count: number }) {
+  return (
+    <NativeTabs.Trigger.Badge hidden={count <= 0}>{count > 0 ? formatBadgeCount(count) : undefined}</NativeTabs.Trigger.Badge>
   );
 }
 
@@ -27,10 +29,12 @@ export default function TabsLayout() {
   const messagesByMatch = useAppStore((state) => state.messagesByMatch);
   const groupMessagesByPlayDate = useAppStore((state) => state.groupMessagesByPlayDate);
   const groupPlayDates = useAppStore((state) => state.groupPlayDates);
+
   const groupAttentionCount = useMemo(
     () => getGroupAttentionCount(groupPlayDates, currentFamilyId, draftProfile),
     [currentFamilyId, draftProfile, groupPlayDates]
   );
+
   const unreadConversationCount = useMemo(
     () =>
       getUnreadConversationThreadCount(
@@ -60,75 +64,68 @@ export default function TabsLayout() {
   );
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-        },
+    <NativeTabs
+      backgroundColor="rgba(17, 24, 39, 0.70)"
+      badgeBackgroundColor={colors.primary}
+      badgeTextColor={colors.surface}
+      blurEffect="systemUltraThinMaterialDark"
+      disableTransparentOnScrollEdge
+      iconColor={{ default: 'rgba(226, 232, 240, 0.72)', selected: '#60a5fa' }}
+      labelStyle={{
+        default: { color: 'rgba(226, 232, 240, 0.72)', fontSize: 12, fontWeight: '600' },
+        selected: { color: '#60a5fa', fontSize: 12, fontWeight: '700' },
       }}
+      shadowColor="rgba(15, 23, 42, 0.35)"
+      tintColor="#60a5fa"
     >
-      <Tabs.Screen
-        name="discover"
-        options={{
-          title: 'Discover',
-          tabBarIcon: renderTabIcon('compass-outline', 'compass'),
-        }}
-      />
-      <Tabs.Screen
-        name="matches"
-        options={{
-          title: 'Matches',
-          tabBarIcon: renderTabIcon('heart-outline', 'heart'),
-        }}
-      />
-      <Tabs.Screen
-        name="inbox"
-        options={{
-          title: 'Inbox',
-          tabBarIcon: renderTabIcon('chatbubble-ellipses-outline', 'chatbubble-ellipses'),
-          tabBarBadge: unreadConversationCount > 0 ? formatBadgeCount(unreadConversationCount) : undefined,
-          tabBarBadgeStyle: unreadConversationCount > 0 ? styles.tabBadge : undefined,
-        }}
-      />
-      <Tabs.Screen
-        name="groups"
-        options={{
-          title: 'Groups',
-          tabBarIcon: renderTabIcon('calendar-clear-outline', 'calendar-clear'),
-          tabBarBadge: groupAttentionCount > 0 ? formatBadgeCount(groupAttentionCount) : undefined,
-          tabBarBadgeStyle: groupAttentionCount > 0 ? styles.tabBadge : undefined,
-        }}
-      />
-      <Tabs.Screen
-        name="me"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="connections"
-        options={{
-          href: null,
-        }}
-      />
-    </Tabs>
+      <NativeTabs.Trigger name="discover">
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'sparkles', selected: 'sparkles' }}
+          src={{
+            default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="compass-outline" size={20} />,
+            selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="compass" size={20} />,
+          }}
+        />
+        <NativeTabs.Trigger.Label>Discover</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="matches">
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'heart', selected: 'heart.fill' }}
+          src={{
+            default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="heart-outline" size={20} />,
+            selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="heart" size={20} />,
+          }}
+        />
+        <NativeTabs.Trigger.Label>Matches</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="inbox">
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'bubble.left', selected: 'bubble.left.fill' }}
+          src={{
+            default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="chatbubble-ellipses-outline" size={20} />,
+            selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="chatbubble-ellipses" size={20} />,
+          }}
+        />
+        <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
+        <InboxBadge count={unreadConversationCount} />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="groups">
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'calendar', selected: 'calendar' }}
+          src={{
+            default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="calendar-clear-outline" size={20} />,
+            selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="calendar-clear" size={20} />,
+          }}
+        />
+        <NativeTabs.Trigger.Label>Groups</NativeTabs.Trigger.Label>
+        <GroupsBadge count={groupAttentionCount} />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger hidden name="me" />
+      <NativeTabs.Trigger hidden name="connections" />
+    </NativeTabs>
   );
 }
-
-const styles = StyleSheet.create({
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  tabBadge: {
-    backgroundColor: colors.primary,
-    color: colors.surface,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-});

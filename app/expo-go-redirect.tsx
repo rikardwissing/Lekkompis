@@ -14,7 +14,12 @@ const getTargetFromWindow = () => {
     return `exp://u.expo.dev/${projectId}/group/${groupId}`;
   }
 
-  return null;
+  const target = params.get('target');
+  if (!target) {
+    return null;
+  }
+
+  return target.replace('/updates/', '/group/');
 };
 
 export default function ExpoGoRedirectScreen() {

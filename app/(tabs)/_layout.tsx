@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useMemo } from 'react';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useAppStore } from '@/store/app-store';
@@ -79,47 +78,23 @@ export default function TabsLayout() {
       tintColor="#60a5fa"
     >
       <NativeTabs.Trigger name="discover">
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'sparkles', selected: 'sparkles' }}
-          src={{
-            default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="compass-outline" size={20} />,
-            selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="compass" size={20} />,
-          }}
-        />
+        <NativeTabs.Trigger.Icon md="travel_explore" sf={{ default: 'sparkles', selected: 'sparkles' }} />
         <NativeTabs.Trigger.Label>Discover</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="matches">
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'heart', selected: 'heart.fill' }}
-          src={{
-            default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="heart-outline" size={20} />,
-            selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="heart" size={20} />,
-          }}
-        />
+        <NativeTabs.Trigger.Icon md="favorite" sf={{ default: 'heart', selected: 'heart.fill' }} />
         <NativeTabs.Trigger.Label>Matches</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="inbox">
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'bubble.left', selected: 'bubble.left.fill' }}
-          src={{
-            default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="chatbubble-ellipses-outline" size={20} />,
-            selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="chatbubble-ellipses" size={20} />,
-          }}
-        />
+        <NativeTabs.Trigger.Icon md="chat" sf={{ default: 'bubble.left', selected: 'bubble.left.fill' }} />
         <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
         <InboxBadge count={unreadConversationCount} />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="groups">
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'calendar', selected: 'calendar' }}
-          src={{
-            default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="calendar-clear-outline" size={20} />,
-            selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="calendar-clear" size={20} />,
-          }}
-        />
+        <NativeTabs.Trigger.Icon md="event" sf={{ default: 'calendar', selected: 'calendar' }} />
         <NativeTabs.Trigger.Label>Groups</NativeTabs.Trigger.Label>
         <GroupsBadge count={groupAttentionCount} />
       </NativeTabs.Trigger>

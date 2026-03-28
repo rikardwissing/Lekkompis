@@ -313,6 +313,7 @@ export default function DiscoverScreen() {
     (publicEventFilters.audience === ANY_PUBLIC_EVENT_AUDIENCE ? 0 : 1) +
     (publicEventFilters.audience === 'children' && publicEventFilters.ageRange !== ANY_PUBLIC_EVENT_AGE ? 1 : 0) +
     publicEventFilters.selectedActivityTags.length;
+  const activeFilterCount = mode === 'families' ? familyFilterCount : publicEventFilterCount;
 
   const filterButtonDisabled =
     mode === 'families'
@@ -517,16 +518,12 @@ export default function DiscoverScreen() {
             ]}
           >
             <Ionicons color={colors.text} name="options-outline" size={16} />
-            <Text style={styles.toolbarFilterText}>
-              Filters
-              {mode === 'families'
-                ? familyFilterCount > 0
-                  ? ` (${familyFilterCount})`
-                  : ''
-                : publicEventFilterCount > 0
-                  ? ` (${publicEventFilterCount})`
-                  : ''}
-            </Text>
+            <Text style={styles.toolbarFilterText}>Filters</Text>
+            {activeFilterCount > 0 ? (
+              <View style={styles.filterCountBadge}>
+                <Text style={styles.filterCountBadgeText}>{activeFilterCount}</Text>
+              </View>
+            ) : null}
           </Pressable>
         </View>
 
@@ -834,6 +831,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: colors.text,
+  },
+  filterCountBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
+  },
+  filterCountBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.surface,
   },
   familyMode: {
     flex: 1,

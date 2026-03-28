@@ -178,7 +178,7 @@ export default function DiscoverScreen() {
   const passedParentIds = getActivePassedParentIds(draftProfile, passedParentIdsByParent);
 
   const draftChildren = draftProfile.children ?? [];
-  const bottomTabSpacing = Math.max(insets.bottom, spacing.md) + 72;
+  const bottomTabSpacing = Math.max(insets.bottom, spacing.sm) + spacing.xl;
   const similarAgeOnly = discoveryFilters.similarAgeOnly ?? false;
   const hasDraftChildren = hasBornChildren(draftProfile);
   const showChildDiscoveryControls = hasDraftChildren && discoveryFilters.familyStage === 'all';
@@ -624,7 +624,7 @@ export default function DiscoverScreen() {
   );
 
   return (
-    <Screen contentStyle={styles.screenContent} edges={['top', 'left', 'right', 'bottom']}>
+    <Screen contentStyle={styles.screenContent} edges={['top', 'left', 'right']}>
       <View style={styles.root}>
         {mode === 'families' ? (
           <View style={styles.familyMode}>

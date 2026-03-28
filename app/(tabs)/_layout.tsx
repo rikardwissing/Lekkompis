@@ -6,6 +6,7 @@ import { StyleSheet } from 'react-native';
 import { useAppStore } from '@/store/app-store';
 import { getConversationThreads, getGroupAttentionCount, getUnreadConversationThreadCount } from '@/store/derived';
 import { colors } from '@/theme/colors';
+import { GlassSurface } from '@/components/ui/GlassSurface';
 
 type TabIconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -67,9 +68,12 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.textMuted,
         tabBarLabelStyle: styles.tabLabel,
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
+          backgroundColor: 'transparent',
+          borderTopColor: 'rgba(255, 255, 255, 0.12)',
+          position: 'absolute',
         },
+        tabBarBackground: () => <GlassSurface glassEffectStyle="regular" style={styles.tabBarGlass} />,
+
       }}
     >
       <Tabs.Screen
@@ -125,9 +129,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  tabBarGlass: {
+    flex: 1,
+    backgroundColor: 'rgba(12, 24, 42, 0.72)',
+  },
   tabBadge: {
     backgroundColor: colors.primary,
-    color: colors.surface,
+    color: '#062742',
     fontSize: 11,
     fontWeight: '700',
   },

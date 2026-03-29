@@ -48,12 +48,12 @@ export default function GroupDetailScreen() {
 
   if (!groupPlayDate) {
     return (
-      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/groups" title="Group" />}>
+      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/plans" title="Group" />}>
         <EmptyState
           title="Group not found"
           body="This group is no longer part of the demo state, so we could not open its detail view."
-          actionLabel="Back to groups"
-          onAction={() => router.replace('/(tabs)/groups')}
+          actionLabel="Back to plans"
+          onAction={() => router.replace('/(tabs)/plans')}
         />
       </Screen>
     );
@@ -61,12 +61,12 @@ export default function GroupDetailScreen() {
 
   if (!canActiveParentViewGroup(groupPlayDate, draftProfile)) {
     return (
-      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/groups" title="Group" />}>
+      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/plans" title="Group" />}>
         <EmptyState
           title="This group has not been shared with this parent yet"
           body="Another parent in your family needs to add this parent before the event and chat show up here."
-          actionLabel="Back to groups"
-          onAction={() => router.replace('/(tabs)/groups')}
+          actionLabel="Back to plans"
+          onAction={() => router.replace('/(tabs)/plans')}
         />
       </Screen>
     );
@@ -91,39 +91,66 @@ export default function GroupDetailScreen() {
       ] as const;
     }),
   ]);
-  const toFamilyList = (familyIds: string[]) =>
-    familyIds.flatMap((familyId) => {
-      const family = familyById[familyId];
+  const parentById = Object.fromEntries([
+    ...draftProfile.parents.map((parent) => [
+      parent.id,
+      {
+        familyId: currentFamilyId,
+        parentName: parent.firstName,
+        avatarUrl: parent.avatarUrl,
+      },
+    ]),
+    ...families.flatMap((family) =>
+      family.parents.map((parent) => [
+        parent.id,
+        {
+          familyId: family.id,
+          parentName: parent.firstName,
+          avatarUrl: parent.avatarUrl,
+        },
+      ])
+    ),
+  ]);
+  const toParentList = (parentIds: string[]) =>
+    parentIds.flatMap((parentId) => {
+      const parent = parentById[parentId];
 
-      return family?.parentName
+      return parent?.parentName
         ? [
             {
-              id: familyId,
-              parentName: family.parentName,
-              avatarUrl: family.avatarUrl,
+              id: parentId,
+              familyId: parent.familyId,
+              parentName: parent.parentName,
+              avatarUrl: parent.avatarUrl,
             },
           ]
         : [];
     });
 
-  const attendees = toFamilyList(groupPlayDate.attendeeFamilyIds);
-  const pendingInvitees = toFamilyList(groupPlayDate.invitedFamilyIds.filter((familyId) => familyId !== currentFamilyId));
-  const requesters = toFamilyList(groupPlayDate.pendingRequestFamilyIds);
-
-  const host = familyById[groupPlayDate.hostFamilyId];
   const activeParentId = activeParent?.id ?? draftProfile.primaryParentId;
+  const attendees = toParentList(groupPlayDate.attendingParentIds);
+  const pendingInvitees = toParentList(groupPlayDate.invitedParentIds.filter((parentId) => parentId !== activeParentId));
+  const requesters = toParentList(groupPlayDate.pendingRequestParentIds);
+
+  const host = parentById[groupPlayDate.hostParentId] ?? familyById[groupPlayDate.hostFamilyId];
   const activeLinkedParents = draftProfile.parents.filter((parent) => parent.status === 'active');
-  const includedParents = activeLinkedParents.filter((parent) => groupPlayDate.includedParentIds.includes(parent.id));
+  const includedParents = activeLinkedParents.filter((parent) => groupPlayDate.accessibleParentIds.includes(parent.id));
   const isHost = groupPlayDate.membership === 'hosting';
-  const isPrivateInvite = groupPlayDate.visibility === 'private' && groupPlayDate.membership === 'invited';
-  const isRequestedPublic = groupPlayDate.visibility === 'public' && groupPlayDate.membership === 'requested';
+  const isPrivateInvite =
+    groupPlayDate.visibility === 'private' &&
+    groupPlayDate.membership === 'invited' &&
+    groupPlayDate.invitedParentIds.includes(activeParentId);
+  const isRequestedPublic =
+    groupPlayDate.visibility === 'public' &&
+    groupPlayDate.membership === 'requested' &&
+    groupPlayDate.pendingRequestParentIds.includes(activeParentId);
   const isPublicNonMember = groupPlayDate.visibility === 'public' && groupPlayDate.membership === 'none';
   const canAccessChat =
     groupPlayDate.membership === 'hosting' ||
     groupPlayDate.membership === 'going' ||
-    (groupPlayDate.visibility === 'private' && groupPlayDate.membership === 'invited');
+    isPrivateInvite;
   const shareableParents = activeLinkedParents.filter(
-    (parent) => parent.id !== activeParentId && !groupPlayDate.includedParentIds.includes(parent.id)
+    (parent) => parent.id !== activeParentId && !groupPlayDate.accessibleParentIds.includes(parent.id)
   );
   const statusLabel =
     groupPlayDate.membership === 'hosting'
@@ -139,10 +166,11 @@ export default function GroupDetailScreen() {
               : 'Invite-only';
   const full = isGroupFull(groupPlayDate);
   const distanceLabel = getGroupDistanceLabel(draftProfile, groupPlayDate);
+  const showDiscoveryMetadata = groupPlayDate.visibility === 'public';
 
   return (
     <Screen
-      header={<SubscreenHeader fallbackHref="/(tabs)/groups" title={groupPlayDate.title} titleOpacity={headerTitleOpacity} />}
+      header={<SubscreenHeader fallbackHref="/(tabs)/plans" title={groupPlayDate.title} titleOpacity={headerTitleOpacity} />}
       scroll
       onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
         useNativeDriver: true,
@@ -160,22 +188,22 @@ export default function GroupDetailScreen() {
           <Avatar name={host?.parentName ?? 'Host'} imageUrl={host?.avatarUrl} />
           <View style={styles.identityText}>
             <Text style={styles.sectionTitle}>Hosted by {host?.parentName ?? 'a nearby parent'}</Text>
-            <Text style={styles.body}>{getGroupAudienceLabel(groupPlayDate)}</Text>
+            <Text style={styles.body}>{showDiscoveryMetadata ? getGroupAudienceLabel(groupPlayDate) : 'Private plan'}</Text>
             {activeParent ? <Text style={styles.body}>Coordinating as {activeParent.firstName}</Text> : null}
           </View>
         </View>
         <View style={styles.filters}>
           <Chip label={statusLabel} />
           <Chip label={groupPlayDate.visibility === 'public' ? 'Public' : 'Invite-only'} />
-          <Chip label={getGroupAudienceLabel(groupPlayDate)} />
           {distanceLabel ? <Chip label={distanceLabel} /> : null}
-          <Chip label={`${groupPlayDate.attendeeFamilyIds.length}/${groupPlayDate.capacity} families`} />
-          {groupPlayDate.activityTags.map((tag) => (
-            <Chip key={tag} label={tag} />
-          ))}
-          {groupPlayDate.vibeTags.map((tag) => (
-            <Chip key={tag} label={tag} />
-          ))}
+          {showDiscoveryMetadata ? <Chip label={getGroupAudienceLabel(groupPlayDate)} /> : null}
+          {showDiscoveryMetadata ? <Chip label={`${groupPlayDate.attendeeFamilyIds.length}/${groupPlayDate.capacity} families`} /> : null}
+          {showDiscoveryMetadata
+            ? groupPlayDate.activityTags.map((tag) => <Chip key={tag} label={tag} />)
+            : null}
+          {showDiscoveryMetadata
+            ? groupPlayDate.vibeTags.map((tag) => <Chip key={tag} label={tag} />)
+            : null}
         </View>
         {isPrivateInvite ? (
           <Text style={styles.pendingCopy}>
@@ -208,7 +236,7 @@ export default function GroupDetailScreen() {
                   label="Decline"
                   variant="secondary"
                   onPress={() => {
-                    router.replace('/(tabs)/groups');
+                    router.replace('/(tabs)/plans');
                     respondToGroupPlayDateInvite(groupPlayDate.id, 'not-going');
                   }}
                 />
@@ -235,7 +263,7 @@ export default function GroupDetailScreen() {
         <Card>
           <Text style={styles.sectionTitle}>Shared with family</Text>
           <Text style={styles.body}>
-            Groups stay with the parent who joined until they explicitly add another linked parent.
+            This event stays with the parent who joined until they explicitly share it with another linked parent.
           </Text>
           <View style={styles.filters}>
             {includedParents.map((parent) => (
@@ -298,7 +326,7 @@ export default function GroupDetailScreen() {
               <Avatar name={attendee.parentName} imageUrl={attendee.avatarUrl} size={40} />
               <View style={styles.attendeeText}>
                 <Text style={styles.attendeeName}>{attendee.parentName}</Text>
-                <Text style={styles.attendeeMeta}>{attendee.id === groupPlayDate.hostFamilyId ? 'Host' : 'Attending'}</Text>
+                <Text style={styles.attendeeMeta}>{attendee.id === groupPlayDate.hostParentId ? 'Host' : 'Attending'}</Text>
               </View>
             </View>
           ))}

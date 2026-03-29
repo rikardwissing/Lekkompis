@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -130,7 +129,7 @@ export default function ChatScreen() {
     [draft, selectedPhotoUrls]
   );
 
-  if (!matchFamily) {
+  if (!matchFamily || !matchParent) {
     return (
       <Screen header={<SubscreenHeader fallbackHref="/(tabs)/inbox" title="Conversation" />}>
         <EmptyState
@@ -145,28 +144,20 @@ export default function ChatScreen() {
 
   if (!canAccessDirectChat) {
     return (
-      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/inbox" title="Conversation" />}>
+      <Screen header={<SubscreenHeader fallbackHref="/(tabs)/discover" title="Conversation" />}>
         <EmptyState
-          title={linkedParentHasConnection ? 'Add this connection to your account first' : 'Direct chat not available yet'}
+          title={linkedParentHasConnection ? 'You need your own match first' : 'Direct chat not available yet'}
           body={
             linkedParentHasConnection
-              ? `${matchParent?.firstName ?? 'This parent'} is already connected with another linked parent in your family. Add them from Matches to join the one-to-one thread as ${activeParent?.firstName ?? 'yourself'}.`
+              ? `${matchParent.firstName} is connected with your linked co-parent, but this chat only opens once you have your own mutual match too.`
               : 'Once you have a direct match with this parent, the conversation will open here.'
           }
-          actionLabel="Open matches"
-          onAction={() => router.replace('/(tabs)/matches')}
+          actionLabel="Open profile"
+          onAction={() => router.replace({ pathname: '/parent/[id]', params: { id: matchParent.id } })}
         />
       </Screen>
     );
   }
-
-  const openMatchProfile = () => {
-    if (!matchParent) {
-      return;
-    }
-
-    router.push({ pathname: '/parent/[id]', params: { id: matchParent.id } });
-  };
 
   const submit = () => {
     const trimmed = draft.trim();
@@ -182,10 +173,7 @@ export default function ChatScreen() {
   };
 
   return (
-    <Screen
-      contentStyle={styles.screenContent}
-      header={<SubscreenHeader fallbackHref="/(tabs)/inbox" title={matchParent?.firstName ?? 'Conversation'} />}
-    >
+    <Screen contentStyle={styles.screenContent} header={<SubscreenHeader fallbackHref="/(tabs)/inbox" title={matchParent.firstName} />}>
       <ChatThread
         attachmentSummaryLabel={
           selectedPhotoUrls.length > 0
@@ -194,29 +182,37 @@ export default function ChatScreen() {
         }
         canSend={canSend}
         context={
-          <Pressable
-            accessibilityHint="Opens the matched parent profile"
-            accessibilityLabel={`Open ${matchParent?.firstName ?? 'this parent'}'s profile`}
-            accessibilityRole="button"
-            onPress={openMatchProfile}
-            style={({ pressed }) => [styles.contextStrip, pressed ? styles.pressed : null]}
-          >
-            <Avatar imageUrl={matchParent?.avatarUrl} name={matchParent?.firstName ?? 'Parent'} size={42} />
-            <View style={styles.contextCopy}>
-              <View style={styles.contextHeaderRow}>
+          <View style={styles.contextStrip}>
+            <View style={styles.contextIdentity}>
+              <Avatar imageUrl={matchParent.avatarUrl} name={matchParent.firstName} size={42} />
+              <View style={styles.contextCopy}>
                 <Text numberOfLines={1} style={styles.contextTitle}>
-                  {matchParent?.firstName ?? 'Parent'}
+                  {matchParent.firstName}
                 </Text>
-                <View style={styles.contextAction}>
-                  <Text style={styles.contextActionText}>Profile</Text>
-                  <Ionicons color={colors.primary} name="chevron-forward" size={14} />
-                </View>
+                <Text numberOfLines={2} style={styles.contextBody}>
+                  {matchFamily.familySummary}
+                </Text>
               </View>
-              <Text numberOfLines={2} style={styles.contextBody}>
-                {matchFamily?.familySummary}
-              </Text>
             </View>
-          </Pressable>
+            <View style={styles.contextActions}>
+              <Pressable
+                accessibilityLabel="Open matched parent profile"
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/parent/[id]', params: { id: matchParent.id } })}
+                style={({ pressed }) => [styles.contextAction, pressed ? styles.pressed : null]}
+              >
+                <Text style={styles.contextActionText}>Profile</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Create a private plan"
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/plan/create', params: { matchId } })}
+                style={({ pressed }) => [styles.contextAction, pressed ? styles.pressed : null]}
+              >
+                <Text style={styles.contextActionText}>Plan</Text>
+              </Pressable>
+            </View>
+          </View>
         }
         draft={draft}
         items={chatItems}
@@ -239,9 +235,7 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   contextStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: 'rgba(227, 231, 227, 0.9)',
@@ -249,40 +243,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
   },
+  contextIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
   contextCopy: {
     flex: 1,
     gap: spacing.xs,
-  },
-  contextHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
   },
   contextTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: colors.text,
-    flex: 1,
-  },
-  contextAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  contextActionText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary,
   },
   contextBody: {
     fontSize: 13,
     lineHeight: 18,
     color: colors.textMuted,
+  },
+  contextActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  contextAction: {
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  contextActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
   },
   pressed: {
     opacity: 0.84,

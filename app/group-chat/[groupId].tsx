@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChatThread, type ChatToolSection } from '@/components/chat/ChatThread';
 import { buildChatRenderableItems } from '@/components/chat/chat-presenters';
 import { SubscreenHeader } from '@/components/navigation/SubscreenHeader';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { getActiveParent, getPrimaryParent, useAppStore } from '@/store/app-store';
@@ -40,6 +41,7 @@ export default function GroupChatScreen() {
   const groupMessagesByPlayDate = useAppStore((state) => state.groupMessagesByPlayDate);
   const markGroupConversationRead = useAppStore((state) => state.markGroupConversationRead);
   const sendGroupMessage = useAppStore((state) => state.sendGroupMessage);
+  const respondToGroupPlayDateInvite = useAppStore((state) => state.respondToGroupPlayDateInvite);
   const activeParent = getActiveParent(draftProfile);
   const primaryParent = getPrimaryParent(draftProfile);
   const activeParentId = activeParent?.id ?? draftProfile.primaryParentId;
@@ -95,16 +97,17 @@ export default function GroupChatScreen() {
     [draftProfile.parents, families]
   );
   const canSend = draft.trim().length > 0 || selectedPhotoUrls.length > 0;
-  const isSharedWithActiveParent = groupPlayDate ? groupPlayDate.includedParentIds.includes(activeParentId) : false;
+  const isSharedWithActiveParent = groupPlayDate ? groupPlayDate.accessibleParentIds.includes(activeParentId) : false;
   const isPendingInvite =
     groupPlayDate?.visibility === 'private' &&
     groupPlayDate.membership === 'invited' &&
-    groupPlayDate.invitedFamilyIds.includes(currentFamilyId);
+    groupPlayDate.invitedParentIds.includes(activeParentId);
   const canAccessChat =
     isSharedWithActiveParent &&
     (groupPlayDate?.membership === 'hosting' ||
       groupPlayDate?.membership === 'going' ||
       isPendingInvite);
+  const showDiscoveryMetadata = groupPlayDate?.visibility === 'public';
 
   useEffect(() => {
     if (!groupPlayDate || !canAccessChat) {
@@ -243,7 +246,7 @@ export default function GroupChatScreen() {
               <Text style={styles.contextMeta}>
                 {groupPlayDate.dateLabel} · {groupPlayDate.timeLabel}
               </Text>
-              <Text style={styles.contextMeta}>{getGroupAudienceLabel(groupPlayDate)}</Text>
+              {showDiscoveryMetadata ? <Text style={styles.contextMeta}>{getGroupAudienceLabel(groupPlayDate)}</Text> : null}
               <Text style={styles.contextMeta}>Hosted by {host?.parentName ?? 'a nearby parent'}</Text>
               {activeParent ? <Text style={styles.contextMeta}>Coordinating as {activeParent.firstName}</Text> : null}
             </View>
@@ -264,12 +267,17 @@ export default function GroupChatScreen() {
                   You can read the thread and reply before deciding. The group still sees you as pending.
                 </Text>
               </View>
-              <Pressable
-                onPress={() => router.push({ pathname: '/group/[id]', params: { id: groupPlayDate.id } })}
-                style={({ pressed }) => [styles.pendingAction, pressed ? styles.pressed : null]}
-              >
-                <Text style={styles.pendingActionText}>Details</Text>
-              </Pressable>
+              <View style={styles.pendingActions}>
+                <View style={styles.pendingActionWide}>
+                  <Button label="Details" variant="secondary" onPress={() => router.push({ pathname: '/group/[id]', params: { id: groupPlayDate.id } })} />
+                </View>
+                <View style={styles.pendingActionWide}>
+                  <Button label="Decline" variant="secondary" onPress={() => respondToGroupPlayDateInvite(groupPlayDate.id, 'not-going')} />
+                </View>
+                <View style={styles.pendingActionWide}>
+                  <Button label="Accept invite" onPress={() => respondToGroupPlayDateInvite(groupPlayDate.id, 'going')} />
+                </View>
+              </View>
             </View>
           ) : undefined
         }
@@ -348,6 +356,13 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xs,
   },
+  pendingActions: {
+    gap: spacing.sm,
+    width: '100%',
+  },
+  pendingActionWide: {
+    width: '100%',
+  },
   pendingTitle: {
     fontSize: 14,
     fontWeight: '700',
@@ -357,17 +372,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: colors.textMuted,
-  },
-  pendingAction: {
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  pendingActionText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.primary,
   },
   pressed: {
     opacity: 0.84,

@@ -15,7 +15,6 @@ import {
   getActiveMatchedParentIds,
   getActiveParent,
   getFamilyByParentId,
-  getLinkedParentMatchedParentIds,
   useAppStore,
 } from '@/store/app-store';
 import {
@@ -42,7 +41,6 @@ export default function ParentDetailScreen() {
   const activeParent = getActiveParent(draftProfile);
   const likedParentIds = getActiveLikedParentIds(draftProfile, likedParentIdsByParent);
   const matchedParentIds = getActiveMatchedParentIds(draftProfile, matchedParentIdsByParent);
-  const linkedParentMatchedParentIds = getLinkedParentMatchedParentIds(draftProfile, matchedParentIdsByParent);
   const headerTitleOpacity = scrollY.interpolate({
     inputRange: [24, 92],
     outputRange: [0, 1],
@@ -64,7 +62,6 @@ export default function ParentDetailScreen() {
 
   const isMatched = matchedParentIds.includes(parent.id);
   const isLiked = likedParentIds.includes(parent.id);
-  const linkedParentHasConnection = !isMatched && linkedParentMatchedParentIds.includes(parent.id);
   const familyChildren = family.children ?? [];
   const sharedInterests = [
     ...new Set([
@@ -76,7 +73,7 @@ export default function ParentDetailScreen() {
   const fitChips = getFamilyFitChips(draftProfile, family, parent);
   const distanceLabel = getFamilyDistanceLabel(draftProfile, family);
   const matchId = activeParent ? buildDirectMatchId(activeParent.id, parent.id) : null;
-  const actionLabel = isMatched ? 'Open chat' : isLiked ? 'Pending' : linkedParentHasConnection ? 'Add to my account' : 'Interested';
+  const actionLabel = isMatched ? 'Open chat' : isLiked ? 'Pending' : 'Interested';
 
   return (
     <Screen
@@ -177,11 +174,6 @@ export default function ParentDetailScreen() {
         </View>
         <Text style={styles.sectionTitle}>First meetup tone</Text>
         <Text style={styles.body}>{family.meetupNote}</Text>
-        {linkedParentHasConnection ? (
-          <Text style={styles.sharedConnectionNote}>
-            {parent.firstName} is already connected with another linked parent in your family. Add them to your own account to join the direct thread as yourself.
-          </Text>
-        ) : null}
       </Card>
       <View style={styles.actions}>
         <Button
@@ -198,7 +190,7 @@ export default function ParentDetailScreen() {
             }
 
             likeParent(parent.id);
-            router.push('/(tabs)/connections');
+            router.push('/(tabs)/inbox');
           }}
         />
       </View>
@@ -255,10 +247,5 @@ const styles = StyleSheet.create({
   },
   actions: {
     gap: spacing.md,
-  },
-  sharedConnectionNote: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.primary,
   },
 });

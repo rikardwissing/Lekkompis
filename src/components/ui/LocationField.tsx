@@ -11,6 +11,7 @@ import {
 } from '@/utils/location';
 
 type LocationFieldProps = {
+  collapseSuggestionsOnSelect?: boolean;
   helperText?: string;
   label: string;
   onChange: (value: SavedLocation | null) => void;
@@ -23,6 +24,7 @@ type LocationFieldProps = {
 };
 
 export function LocationField({
+  collapseSuggestionsOnSelect = false,
   helperText,
   label,
   onChange,
@@ -34,19 +36,27 @@ export function LocationField({
   valueFormatter = getPrivateLocationLabel,
 }: LocationFieldProps) {
   const [query, setQuery] = useState(value ? valueFormatter(value) : '');
+  const [showSuggestions, setShowSuggestions] = useState(!collapseSuggestionsOnSelect || !value);
 
   useEffect(() => {
     if (!value) {
+      if (collapseSuggestionsOnSelect) {
+        setShowSuggestions(true);
+      }
       return;
     }
 
     setQuery(valueFormatter(value));
-  }, [value, valueFormatter]);
+    if (collapseSuggestionsOnSelect) {
+      setShowSuggestions(false);
+    }
+  }, [collapseSuggestionsOnSelect, value, valueFormatter]);
 
   const filteredSuggestions = useMemo(() => {
     const results = searchLocationSuggestions(query, suggestions);
     return results.slice(0, query.trim().length > 0 ? 6 : 5);
   }, [query, suggestions]);
+  const selected = value ? query === valueFormatter(value) : false;
 
   return (
     <View style={styles.wrapper}>
@@ -54,6 +64,9 @@ export function LocationField({
       <TextInput
         onChangeText={(nextValue) => {
           setQuery(nextValue);
+          if (collapseSuggestionsOnSelect) {
+            setShowSuggestions(true);
+          }
 
           if (value && nextValue !== valueFormatter(value)) {
             onChange(null);
@@ -61,33 +74,38 @@ export function LocationField({
         }}
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
-        style={styles.input}
+        style={[styles.input, collapseSuggestionsOnSelect && selected ? styles.inputSelected : null]}
         value={query}
       />
-      <View style={styles.suggestionList}>
-        {filteredSuggestions.map((location) => {
-          const selected = value?.id === location.id;
+      {showSuggestions ? (
+        <View style={styles.suggestionList}>
+          {filteredSuggestions.map((location) => {
+            const suggestionSelected = value?.id === location.id;
 
-          return (
-            <Pressable
-              key={location.id}
-              accessibilityRole="button"
-              onPress={() => {
-                setQuery(valueFormatter(location));
-                onChange(location);
-              }}
-              style={({ pressed }) => [
-                styles.suggestionCard,
-                selected ? styles.suggestionCardSelected : null,
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text style={styles.suggestionTitle}>{suggestionTitleFormatter(location)}</Text>
-              <Text style={styles.suggestionMeta}>{suggestionMetaFormatter(location)}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+            return (
+              <Pressable
+                key={location.id}
+                accessibilityRole="button"
+                onPress={() => {
+                  setQuery(valueFormatter(location));
+                  onChange(location);
+                  if (collapseSuggestionsOnSelect) {
+                    setShowSuggestions(false);
+                  }
+                }}
+                style={({ pressed }) => [
+                  styles.suggestionCard,
+                  suggestionSelected ? styles.suggestionCardSelected : null,
+                  pressed ? styles.pressed : null,
+                ]}
+              >
+                <Text style={styles.suggestionTitle}>{suggestionTitleFormatter(location)}</Text>
+                <Text style={styles.suggestionMeta}>{suggestionMetaFormatter(location)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
       {helperText ? <Text style={styles.helperText}>{helperText}</Text> : null}
     </View>
   );
@@ -111,6 +129,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     color: colors.text,
     fontSize: 16,
+  },
+  inputSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
   suggestionList: {
     gap: spacing.sm,

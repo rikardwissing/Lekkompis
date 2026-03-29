@@ -68,7 +68,7 @@ export type Message = {
 
 export type GroupPlayDateVisibility = 'private' | 'public';
 export type GroupPlayDateMembership = 'hosting' | 'going' | 'invited' | 'requested' | 'none';
-export type GroupPlayDateAudience = 'children' | 'expecting';
+export type GroupPlayDateAudience = 'children' | 'expecting' | 'mixed';
 
 export type GroupPlayDate = {
   id: string;
@@ -84,12 +84,14 @@ export type GroupPlayDate = {
   note: string;
   capacity: number;
   hostFamilyId: string;
+  hostParentId: string;
   visibility: GroupPlayDateVisibility;
   membership: GroupPlayDateMembership;
   attendeeFamilyIds: string[];
-  invitedFamilyIds: string[];
-  includedParentIds: string[];
-  pendingRequestFamilyIds: string[];
+  attendingParentIds: string[];
+  invitedParentIds: string[];
+  accessibleParentIds: string[];
+  pendingRequestParentIds: string[];
   createdAt: number;
 };
 
@@ -123,7 +125,7 @@ export type DiscoveryFilters = {
 export type PublicEventFilters = {
   radiusKm: DistanceRadiusKm;
   ageRange: string;
-  audience: 'all' | GroupPlayDateAudience;
+  audience: 'all' | Exclude<GroupPlayDateAudience, 'mixed'>;
   selectedActivityTags: string[];
 };
 
@@ -140,12 +142,13 @@ export type CreateGroupPlayDateInput = {
   note: string;
   capacity: number;
   visibility: GroupPlayDateVisibility;
-  invitedFamilyIds: string[];
+  invitedParentIds: string[];
 };
 
 export type ConversationThread = {
   id: string;
   kind: 'direct' | 'group';
+  isNewMatch: boolean;
   title: string;
   subtitle: string;
   lastMessagePreview: string;
@@ -170,6 +173,7 @@ type AppState = {
   likedParentIdsByParent: ParentIdsByParent;
   passedParentIdsByParent: ParentIdsByParent;
   matchedParentIdsByParent: ParentIdsByParent;
+  matchedAtByMatchId: Record<string, number>;
   directConversationLastSeenAtByParent: ConversationLastSeenByParent;
   groupConversationLastSeenAtByParent: Record<string, Record<string, number>>;
   messagesByMatch: Record<string, Message[]>;
@@ -212,8 +216,8 @@ type AppState = {
   respondToGroupPlayDateInvite: (id: string, response: 'going' | 'not-going') => void;
   addLinkedParentToGroup: (id: string, parentId: string) => void;
   requestToJoinGroupPlayDate: (id: string) => void;
-  approveGroupJoinRequest: (id: string, familyId: string) => void;
-  declineGroupJoinRequest: (id: string, familyId: string) => void;
+  approveGroupJoinRequest: (id: string, parentId: string) => void;
+  declineGroupJoinRequest: (id: string, parentId: string) => void;
   createGroupPlayDate: (input: CreateGroupPlayDateInput) => string;
 };
 
@@ -254,7 +258,12 @@ const hasExpectingProfileInternal = (expecting?: ExpectingProfile | null) =>
 const canParticipateInAudienceInternal = (
   value: { children?: ChildProfile[]; expecting?: ExpectingProfile | null },
   audience: GroupPlayDateAudience
-) => (audience === 'children' ? hasChildrenInternal(value.children) : hasExpectingProfileInternal(value.expecting));
+) =>
+  audience === 'mixed'
+    ? true
+    : audience === 'children'
+      ? hasChildrenInternal(value.children)
+      : hasExpectingProfileInternal(value.expecting);
 
 const createChild = (overrides: Partial<ChildProfile> = {}): ChildProfile => ({
   id: overrides.id ?? `child-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -711,19 +720,20 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     locationName: 'Vasaparken playground',
     dateLabel: 'Sat 29 Mar',
     timeLabel: '10:00-11:30',
-    ageRange: '3-5 years',
-    audience: 'children',
-    activityTags: ['Playgrounds', 'Scooters'],
-    vibeTags: ['Public place first', 'Outdoor-friendly'],
+    audience: 'mixed',
+    activityTags: [],
+    vibeTags: [],
     note: 'Sara is hosting a low-key first meetup with coffee after if the kids click.',
-    capacity: 4,
+    capacity: 3,
     hostFamilyId: 'sara',
+    hostParentId: 'sara-primary',
     visibility: 'private',
     membership: 'invited',
     attendeeFamilyIds: ['sara'],
-    invitedFamilyIds: [CURRENT_FAMILY_ID, 'johan'],
-    includedParentIds: [CURRENT_PRIMARY_PARENT_ID],
-    pendingRequestFamilyIds: [],
+    attendingParentIds: ['sara-primary'],
+    invitedParentIds: [CURRENT_PRIMARY_PARENT_ID, 'johan-primary'],
+    accessibleParentIds: [CURRENT_PRIMARY_PARENT_ID],
+    pendingRequestParentIds: [],
     createdAt: atMinute(4),
   },
   {
@@ -740,12 +750,14 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     note: 'You are hosting this one for nearby matches who enjoy easy Sunday mornings.',
     capacity: 3,
     hostFamilyId: CURRENT_FAMILY_ID,
+    hostParentId: CURRENT_PRIMARY_PARENT_ID,
     visibility: 'public',
     membership: 'hosting',
     attendeeFamilyIds: [CURRENT_FAMILY_ID, 'sara'],
-    invitedFamilyIds: [],
-    includedParentIds: [CURRENT_PRIMARY_PARENT_ID],
-    pendingRequestFamilyIds: ['johan'],
+    attendingParentIds: [CURRENT_PRIMARY_PARENT_ID, 'sara-primary'],
+    invitedParentIds: [],
+    accessibleParentIds: [CURRENT_PRIMARY_PARENT_ID],
+    pendingRequestParentIds: ['johan-primary'],
     createdAt: atMinute(16),
   },
   {
@@ -762,12 +774,14 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     note: 'A relaxed public meetup with blankets, picture books, and a simple snack stop after if the kids are still happy.',
     capacity: 4,
     hostFamilyId: 'sara',
+    hostParentId: 'sara-primary',
     visibility: 'public',
     membership: 'none',
     attendeeFamilyIds: ['sara'],
-    invitedFamilyIds: [],
-    includedParentIds: [],
-    pendingRequestFamilyIds: [],
+    attendingParentIds: ['sara-primary'],
+    invitedParentIds: [],
+    accessibleParentIds: [],
+    pendingRequestParentIds: [],
     createdAt: atMinute(28),
   },
   {
@@ -784,12 +798,14 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     note: 'Already a full public event built around a short craft session and a quick park stop after.',
     capacity: 2,
     hostFamilyId: 'elin',
+    hostParentId: 'elin-primary',
     visibility: 'public',
     membership: 'none',
     attendeeFamilyIds: ['elin', 'fatima'],
-    invitedFamilyIds: [],
-    includedParentIds: [],
-    pendingRequestFamilyIds: [],
+    attendingParentIds: ['elin-primary', 'fatima-primary'],
+    invitedParentIds: [],
+    accessibleParentIds: [],
+    pendingRequestParentIds: [],
     createdAt: atMinute(32),
   },
   {
@@ -799,18 +815,20 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     locationName: 'Norrtull cafe corner',
     dateLabel: 'Thu 3 Apr',
     timeLabel: '10:30-11:45',
-    audience: 'expecting',
-    activityTags: ['Coffee', 'Walk'],
-    vibeTags: ['Public place first', 'Calm pace'],
+    audience: 'mixed',
+    activityTags: [],
+    vibeTags: [],
     note: 'Mira is keeping this one easy: coffee first, then a short walk if everyone still has energy.',
-    capacity: 4,
+    capacity: 2,
     hostFamilyId: 'mira',
+    hostParentId: 'mira-primary',
     visibility: 'private',
     membership: 'invited',
     attendeeFamilyIds: ['mira'],
-    invitedFamilyIds: [CURRENT_FAMILY_ID],
-    includedParentIds: [CURRENT_PRIMARY_PARENT_ID],
-    pendingRequestFamilyIds: [],
+    attendingParentIds: ['mira-primary'],
+    invitedParentIds: [CURRENT_PRIMARY_PARENT_ID],
+    accessibleParentIds: [CURRENT_PRIMARY_PARENT_ID],
+    pendingRequestParentIds: [],
     createdAt: atMinute(12),
   },
   {
@@ -826,12 +844,14 @@ const initialGroupPlayDates: GroupPlayDate[] = [
     note: 'A relaxed expecting-parents meetup with plenty of sit-down time and no pressure to stay the whole time.',
     capacity: 5,
     hostFamilyId: 'mira',
+    hostParentId: 'mira-primary',
     visibility: 'public',
     membership: 'none',
     attendeeFamilyIds: ['mira'],
-    invitedFamilyIds: [],
-    includedParentIds: [],
-    pendingRequestFamilyIds: [],
+    attendingParentIds: ['mira-primary'],
+    invitedParentIds: [],
+    accessibleParentIds: [],
+    pendingRequestParentIds: [],
     createdAt: atMinute(36),
   },
 ];
@@ -859,7 +879,13 @@ const defaultPassedParentIdsByParent: ParentIdsByParent = {
   [CURRENT_PRIMARY_PARENT_ID]: [],
 };
 const defaultMatchedParentIdsByParent: ParentIdsByParent = {
-  [CURRENT_PRIMARY_PARENT_ID]: defaultMatchedParentIds,
+  [CURRENT_PRIMARY_PARENT_ID]: [...defaultMatchedParentIds, 'elin-primary'],
+};
+const initialMatchedAtByMatchId: Record<string, number> = {
+  [buildDirectMatchIdInternal(CURRENT_PRIMARY_PARENT_ID, 'sara-primary')]: atMinute(5),
+  [buildDirectMatchIdInternal(CURRENT_PRIMARY_PARENT_ID, 'mira-primary')]: atMinute(33),
+  [buildDirectMatchIdInternal(CURRENT_PRIMARY_PARENT_ID, 'elin-primary')]: atMinute(44),
+  [buildDirectMatchIdInternal(DEMO_COPARENT.id, 'sara-coparent')]: atMinute(26),
 };
 const initialDirectConversationLastSeenAtByParent: ConversationLastSeenByParent = {
   [CURRENT_PRIMARY_PARENT_ID]: {
@@ -872,7 +898,6 @@ const initialGroupConversationLastSeenAtByParent: Record<string, Record<string, 
     'animal-zoo-sunday': atMinute(18),
   },
 };
-
 export const getParentById = (parents: ParentAccount[], parentId: string) =>
   getParentByIdInternal(parents, parentId);
 
@@ -982,6 +1007,7 @@ export const useAppStore = create<AppState>((set) => ({
   likedParentIdsByParent: defaultLikedParentIdsByParent,
   passedParentIdsByParent: defaultPassedParentIdsByParent,
   matchedParentIdsByParent: defaultMatchedParentIdsByParent,
+  matchedAtByMatchId: initialMatchedAtByMatchId,
   directConversationLastSeenAtByParent: initialDirectConversationLastSeenAtByParent,
   groupConversationLastSeenAtByParent: initialGroupConversationLastSeenAtByParent,
   messagesByMatch: initialMessages,
@@ -1109,7 +1135,12 @@ export const useAppStore = create<AppState>((set) => ({
         },
         matchedParentIdsByParent: {
           ...state.matchedParentIdsByParent,
-          [DEMO_COPARENT.id]: state.matchedParentIdsByParent[DEMO_COPARENT.id] ?? [],
+          [DEMO_COPARENT.id]: state.matchedParentIdsByParent[DEMO_COPARENT.id] ?? ['sara-coparent'],
+        },
+        matchedAtByMatchId: {
+          ...state.matchedAtByMatchId,
+          [buildDirectMatchIdInternal(DEMO_COPARENT.id, 'sara-coparent')]:
+            state.matchedAtByMatchId[buildDirectMatchIdInternal(DEMO_COPARENT.id, 'sara-coparent')] ?? atMinute(26),
         },
         directConversationLastSeenAtByParent: {
           ...state.directConversationLastSeenAtByParent,
@@ -1318,6 +1349,7 @@ export const useAppStore = create<AppState>((set) => ({
       likedParentIdsByParent: defaultLikedParentIdsByParent,
       passedParentIdsByParent: defaultPassedParentIdsByParent,
       matchedParentIdsByParent: defaultMatchedParentIdsByParent,
+      matchedAtByMatchId: initialMatchedAtByMatchId,
       directConversationLastSeenAtByParent: initialDirectConversationLastSeenAtByParent,
       groupConversationLastSeenAtByParent: initialGroupConversationLastSeenAtByParent,
       messagesByMatch: initialMessages,
@@ -1336,15 +1368,8 @@ export const useAppStore = create<AppState>((set) => ({
 
       const activeLikedParentIds = getIdsForParentInternal(state.likedParentIdsByParent, activeParent.id);
       const activeMatchedParentIds = getIdsForParentInternal(state.matchedParentIdsByParent, activeParent.id);
-      const alreadyMatchedByAnotherLinkedParent = state.draftProfile.parents.some(
-        (parent) =>
-          parent.id !== activeParent.id &&
-          parent.status === 'active' &&
-          getIdsForParentInternal(state.matchedParentIdsByParent, parent.id).includes(id)
-      );
-      const shouldMatch =
-        alreadyMatchedByAnotherLinkedParent ||
-        (['sara-primary', 'sara-coparent', 'mira-primary'].includes(id) && !activeMatchedParentIds.includes(id));
+      const shouldMatch = ['sara-primary', 'sara-coparent', 'mira-primary', 'elin-primary'].includes(id) && !activeMatchedParentIds.includes(id);
+      const matchId = buildDirectMatchIdInternal(activeParent.id, id);
 
       return {
         likedParentIdsByParent: {
@@ -1355,6 +1380,12 @@ export const useAppStore = create<AppState>((set) => ({
           ...state.matchedParentIdsByParent,
           [activeParent.id]: shouldMatch ? unique([...activeMatchedParentIds, id]) : activeMatchedParentIds,
         },
+        matchedAtByMatchId: shouldMatch
+          ? {
+              ...state.matchedAtByMatchId,
+              [matchId]: state.matchedAtByMatchId[matchId] ?? Date.now(),
+            }
+          : state.matchedAtByMatchId,
       };
     }),
   passParent: (id) =>
@@ -1505,8 +1536,8 @@ export const useAppStore = create<AppState>((set) => ({
         if (
           groupPlayDate.id !== id ||
           !canShareIntoChat ||
-          !groupPlayDate.includedParentIds.includes(activeParent.id) ||
-          groupPlayDate.includedParentIds.includes(linkedParent.id)
+          !groupPlayDate.accessibleParentIds.includes(activeParent.id) ||
+          groupPlayDate.accessibleParentIds.includes(linkedParent.id)
         ) {
           return groupPlayDate;
         }
@@ -1515,7 +1546,11 @@ export const useAppStore = create<AppState>((set) => ({
 
         return {
           ...groupPlayDate,
-          includedParentIds: [...groupPlayDate.includedParentIds, linkedParent.id],
+          accessibleParentIds: [...groupPlayDate.accessibleParentIds, linkedParent.id],
+          attendingParentIds:
+            groupPlayDate.membership === 'hosting' || groupPlayDate.membership === 'going'
+              ? unique([...groupPlayDate.attendingParentIds, linkedParent.id])
+              : groupPlayDate.attendingParentIds,
         };
       });
 
@@ -1555,22 +1590,36 @@ export const useAppStore = create<AppState>((set) => ({
         return state;
       }
 
+      const createdAt = Date.now();
+      let didRespond = false;
+
       return {
+        groupConversationLastSeenAtByParent: {
+          ...state.groupConversationLastSeenAtByParent,
+          [activeParent.id]: {
+            ...(state.groupConversationLastSeenAtByParent[activeParent.id] ?? {}),
+            [id]: createdAt,
+          },
+        },
         groupPlayDates: state.groupPlayDates.map((groupPlayDate) => {
           if (
             groupPlayDate.id !== id ||
             groupPlayDate.visibility !== 'private' ||
-            groupPlayDate.membership !== 'invited'
+            groupPlayDate.membership !== 'invited' ||
+            !groupPlayDate.invitedParentIds.includes(activeParent.id)
           ) {
             return groupPlayDate;
           }
+
+          didRespond = true;
 
           if (response === 'not-going') {
             return {
               ...groupPlayDate,
               membership: 'none',
-              invitedFamilyIds: groupPlayDate.invitedFamilyIds.filter((familyId) => familyId !== state.currentFamilyId),
-              includedParentIds: [],
+              invitedParentIds: groupPlayDate.invitedParentIds.filter((parentId) => parentId !== activeParent.id),
+              accessibleParentIds: groupPlayDate.accessibleParentIds.filter((parentId) => parentId !== activeParent.id),
+              attendingParentIds: groupPlayDate.attendingParentIds.filter((parentId) => parentId !== activeParent.id),
             };
           }
 
@@ -1578,16 +1627,36 @@ export const useAppStore = create<AppState>((set) => ({
             return groupPlayDate;
           }
 
+          const localAccessibleParents = groupPlayDate.accessibleParentIds.filter(
+            (parentId) => getFamilyIdForParentIdInternal(state.families, parentId) === state.currentFamilyId
+          );
+
           return {
             ...groupPlayDate,
             membership: 'going',
             attendeeFamilyIds: groupPlayDate.attendeeFamilyIds.includes(state.currentFamilyId)
               ? groupPlayDate.attendeeFamilyIds
               : [...groupPlayDate.attendeeFamilyIds, state.currentFamilyId],
-            invitedFamilyIds: groupPlayDate.invitedFamilyIds.filter((familyId) => familyId !== state.currentFamilyId),
-            includedParentIds: unique([...groupPlayDate.includedParentIds, activeParent.id]),
+            invitedParentIds: groupPlayDate.invitedParentIds.filter((parentId) => parentId !== activeParent.id),
+            accessibleParentIds: unique([...groupPlayDate.accessibleParentIds, activeParent.id]),
+            attendingParentIds: unique([...groupPlayDate.attendingParentIds, ...localAccessibleParents, activeParent.id]),
           };
         }),
+        groupMessagesByPlayDate: didRespond
+          ? {
+              ...state.groupMessagesByPlayDate,
+              [id]: [
+                ...(state.groupMessagesByPlayDate[id] ?? []),
+                createGroupEventMessage({
+                  body: `${activeParent.firstName} ${response === 'going' ? 'accepted' : 'declined'} the invitation.`,
+                  createdAt,
+                  groupId: id,
+                  senderFamilyId: state.currentFamilyId,
+                  senderParentId: activeParent.id,
+                }),
+              ],
+            }
+          : state.groupMessagesByPlayDate,
       };
     }),
   requestToJoinGroupPlayDate: (id) =>
@@ -1616,114 +1685,207 @@ export const useAppStore = create<AppState>((set) => ({
           return {
             ...groupPlayDate,
             membership: 'requested',
-            includedParentIds: unique([...groupPlayDate.includedParentIds, activeParent.id]),
-            pendingRequestFamilyIds: groupPlayDate.pendingRequestFamilyIds.includes(state.currentFamilyId)
-              ? groupPlayDate.pendingRequestFamilyIds
-              : [...groupPlayDate.pendingRequestFamilyIds, state.currentFamilyId],
+            accessibleParentIds: unique([...groupPlayDate.accessibleParentIds, activeParent.id]),
+            pendingRequestParentIds: groupPlayDate.pendingRequestParentIds.includes(activeParent.id)
+              ? groupPlayDate.pendingRequestParentIds
+              : [...groupPlayDate.pendingRequestParentIds, activeParent.id],
           };
         }),
       };
     }),
-  approveGroupJoinRequest: (id, familyId) =>
-    set((state) => ({
-      groupPlayDates: state.groupPlayDates.map((groupPlayDate) => {
-        const isHostOwned = groupPlayDate.hostFamilyId === state.currentFamilyId;
-        const isFull = groupPlayDate.attendeeFamilyIds.length >= groupPlayDate.capacity;
+  approveGroupJoinRequest: (id, parentId) =>
+    set((state) => {
+      const activeParent = getActiveParentInternal(state.draftProfile);
+      const requesterFamily = getFamilyByParentIdInternal(state.families, parentId);
+      const requesterParent = requesterFamily?.parents.find((parent) => parent.id === parentId) ?? null;
+      const requesterName =
+        requesterParent?.firstName ??
+        (requesterFamily ? getPrimaryParentInternal(requesterFamily)?.firstName : null) ??
+        'a parent';
 
-        if (
-          groupPlayDate.id !== id ||
-          groupPlayDate.visibility !== 'public' ||
-          !isHostOwned ||
-          !groupPlayDate.pendingRequestFamilyIds.includes(familyId) ||
-          isFull
-        ) {
-          return groupPlayDate;
-        }
+      if (!activeParent) {
+        return state;
+      }
 
-        return {
-          ...groupPlayDate,
-          membership: familyId === state.currentFamilyId ? 'going' : groupPlayDate.membership,
-          attendeeFamilyIds: groupPlayDate.attendeeFamilyIds.includes(familyId)
-            ? groupPlayDate.attendeeFamilyIds
-            : [...groupPlayDate.attendeeFamilyIds, familyId],
-          pendingRequestFamilyIds: groupPlayDate.pendingRequestFamilyIds.filter((entry) => entry !== familyId),
-        };
-      }),
-    })),
-  declineGroupJoinRequest: (id, familyId) =>
-    set((state) => ({
-      groupPlayDates: state.groupPlayDates.map((groupPlayDate) => {
-        const isHostOwned = groupPlayDate.hostFamilyId === state.currentFamilyId;
+      const createdAt = Date.now();
+      let approved = false;
 
-        if (
-          groupPlayDate.id !== id ||
-          groupPlayDate.visibility !== 'public' ||
-          !isHostOwned ||
-          !groupPlayDate.pendingRequestFamilyIds.includes(familyId)
-        ) {
-          return groupPlayDate;
-        }
+      return {
+        groupPlayDates: state.groupPlayDates.map((groupPlayDate) => {
+          const isHostOwned = groupPlayDate.hostFamilyId === state.currentFamilyId;
+          const requesterFamilyId = requesterFamily?.id ?? null;
+          const isNewFamilySeat = requesterFamilyId
+            ? !groupPlayDate.attendeeFamilyIds.includes(requesterFamilyId)
+            : false;
+          const isFull = groupPlayDate.attendeeFamilyIds.length >= groupPlayDate.capacity && isNewFamilySeat;
 
-        return {
-          ...groupPlayDate,
-          membership: familyId === state.currentFamilyId ? 'none' : groupPlayDate.membership,
-          pendingRequestFamilyIds: groupPlayDate.pendingRequestFamilyIds.filter((entry) => entry !== familyId),
-        };
-      }),
-    })),
+          if (
+            groupPlayDate.id !== id ||
+            groupPlayDate.visibility !== 'public' ||
+            !isHostOwned ||
+            !groupPlayDate.pendingRequestParentIds.includes(parentId) ||
+            isFull
+          ) {
+            return groupPlayDate;
+          }
+
+          approved = true;
+
+          return {
+            ...groupPlayDate,
+            membership: requesterFamilyId === state.currentFamilyId ? 'going' : groupPlayDate.membership,
+            attendeeFamilyIds: !requesterFamilyId || groupPlayDate.attendeeFamilyIds.includes(requesterFamilyId)
+              ? groupPlayDate.attendeeFamilyIds
+              : [...groupPlayDate.attendeeFamilyIds, requesterFamilyId],
+            attendingParentIds: unique([...groupPlayDate.attendingParentIds, parentId]),
+            accessibleParentIds:
+              requesterFamilyId === state.currentFamilyId
+                ? unique([...groupPlayDate.accessibleParentIds, parentId])
+                : groupPlayDate.accessibleParentIds,
+            pendingRequestParentIds: groupPlayDate.pendingRequestParentIds.filter((entry) => entry !== parentId),
+          };
+        }),
+        groupMessagesByPlayDate: approved
+          ? {
+              ...state.groupMessagesByPlayDate,
+              [id]: [
+                ...(state.groupMessagesByPlayDate[id] ?? []),
+                createGroupEventMessage({
+                  body: `${activeParent.firstName} approved ${requesterName}'s request to join.`,
+                  createdAt,
+                  groupId: id,
+                  senderFamilyId: state.currentFamilyId,
+                  senderParentId: activeParent.id,
+                }),
+              ],
+            }
+          : state.groupMessagesByPlayDate,
+      };
+    }),
+  declineGroupJoinRequest: (id, parentId) =>
+    set((state) => {
+      const activeParent = getActiveParentInternal(state.draftProfile);
+      const requesterFamily = getFamilyByParentIdInternal(state.families, parentId);
+      const requesterParent = requesterFamily?.parents.find((parent) => parent.id === parentId) ?? null;
+      const requesterName =
+        requesterParent?.firstName ??
+        (requesterFamily ? getPrimaryParentInternal(requesterFamily)?.firstName : null) ??
+        'a parent';
+
+      if (!activeParent) {
+        return state;
+      }
+
+      const createdAt = Date.now();
+      let declined = false;
+
+      return {
+        groupPlayDates: state.groupPlayDates.map((groupPlayDate) => {
+          const isHostOwned = groupPlayDate.hostFamilyId === state.currentFamilyId;
+
+          if (
+            groupPlayDate.id !== id ||
+            groupPlayDate.visibility !== 'public' ||
+            !isHostOwned ||
+            !groupPlayDate.pendingRequestParentIds.includes(parentId)
+          ) {
+            return groupPlayDate;
+          }
+
+          declined = true;
+
+          const requesterFamilyId = requesterFamily?.id ?? null;
+
+          return {
+            ...groupPlayDate,
+            membership: requesterFamilyId === state.currentFamilyId ? 'none' : groupPlayDate.membership,
+            accessibleParentIds:
+              requesterFamilyId === state.currentFamilyId
+                ? groupPlayDate.accessibleParentIds.filter((entry) => entry !== parentId)
+                : groupPlayDate.accessibleParentIds,
+            pendingRequestParentIds: groupPlayDate.pendingRequestParentIds.filter((entry) => entry !== parentId),
+          };
+        }),
+        groupMessagesByPlayDate: declined
+          ? {
+              ...state.groupMessagesByPlayDate,
+              [id]: [
+                ...(state.groupMessagesByPlayDate[id] ?? []),
+                createGroupEventMessage({
+                  body: `${activeParent.firstName} declined ${requesterName}'s request to join.`,
+                  createdAt,
+                  groupId: id,
+                  senderFamilyId: state.currentFamilyId,
+                  senderParentId: activeParent.id,
+                }),
+              ],
+            }
+          : state.groupMessagesByPlayDate,
+      };
+    }),
   createGroupPlayDate: (input) => {
     const createdAt = Date.now();
     const id = `${slugify(input.title)}-${createdAt}`;
 
-    set((state) => ({
-      groupConversationLastSeenAtByParent: (() => {
-        const activeParent = getActiveParentInternal(state.draftProfile);
+    set((state) => {
+      const activeParent = getActiveParentInternal(state.draftProfile);
+      const activeParentId = activeParent?.id ?? state.draftProfile.primaryParentId;
+      const invitedParentIds =
+        input.visibility === 'private'
+          ? input.invitedParentIds.filter(
+              (parentId) =>
+                parentId !== activeParentId && getFamilyIdForParentIdInternal(state.families, parentId) !== state.currentFamilyId
+            )
+          : [];
+      const invitedFamilyCount = unique(
+        invitedParentIds
+          .map((parentId) => getFamilyIdForParentIdInternal(state.families, parentId))
+          .filter((familyId): familyId is string => Boolean(familyId))
+      ).length;
 
-        if (!activeParent) {
-          return state.groupConversationLastSeenAtByParent;
-        }
-
-        return {
-          ...state.groupConversationLastSeenAtByParent,
-          [activeParent.id]: {
-            ...(state.groupConversationLastSeenAtByParent[activeParent.id] ?? {}),
-            [id]: createdAt,
+      return {
+        groupConversationLastSeenAtByParent: activeParent
+          ? {
+              ...state.groupConversationLastSeenAtByParent,
+              [activeParent.id]: {
+                ...(state.groupConversationLastSeenAtByParent[activeParent.id] ?? {}),
+                [id]: createdAt,
+              },
+            }
+          : state.groupConversationLastSeenAtByParent,
+        groupPlayDates: [
+          {
+            id,
+            title: input.title,
+            location: input.location,
+            locationName: input.locationName,
+            dateLabel: input.dateLabel,
+            timeLabel: input.timeLabel,
+            audience: input.visibility === 'private' ? 'mixed' : input.audience,
+            ageRange: input.visibility === 'private' ? undefined : input.ageRange,
+            activityTags: input.visibility === 'private' ? [] : input.activityTags,
+            vibeTags: input.visibility === 'private' ? [] : input.vibeTags,
+            note: input.note,
+            capacity: input.visibility === 'private' ? invitedFamilyCount + 1 : input.capacity,
+            hostFamilyId: state.currentFamilyId,
+            hostParentId: activeParentId,
+            visibility: input.visibility,
+            membership: 'hosting',
+            attendeeFamilyIds: [state.currentFamilyId],
+            attendingParentIds: [activeParentId],
+            invitedParentIds,
+            accessibleParentIds: [activeParentId],
+            pendingRequestParentIds: [],
+            createdAt,
           },
-        };
-      })(),
-      groupPlayDates: [
-        {
-          id,
-          title: input.title,
-          location: input.location,
-          locationName: input.locationName,
-          dateLabel: input.dateLabel,
-          timeLabel: input.timeLabel,
-          audience: input.audience,
-          ageRange: input.ageRange,
-          activityTags: input.activityTags,
-          vibeTags: input.vibeTags,
-          note: input.note,
-          capacity: input.capacity,
-          hostFamilyId: state.currentFamilyId,
-          visibility: input.visibility,
-          membership: 'hosting',
-          attendeeFamilyIds: [state.currentFamilyId],
-          invitedFamilyIds:
-            input.visibility === 'private'
-              ? input.invitedFamilyIds.filter((familyId) => familyId !== state.currentFamilyId)
-              : [],
-          includedParentIds: [getActiveParentInternal(state.draftProfile)?.id ?? state.draftProfile.primaryParentId],
-          pendingRequestFamilyIds: [],
-          createdAt,
+          ...state.groupPlayDates,
+        ],
+        groupMessagesByPlayDate: {
+          ...state.groupMessagesByPlayDate,
+          [id]: [],
         },
-        ...state.groupPlayDates,
-      ],
-      groupMessagesByPlayDate: {
-        ...state.groupMessagesByPlayDate,
-        [id]: [],
-      },
-    }));
+      };
+    });
 
     return id;
   },

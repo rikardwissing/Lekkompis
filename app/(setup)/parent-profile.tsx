@@ -106,7 +106,7 @@ export default function ParentProfileScreen() {
         </View>
         <BirthdayField
           label="Your birthday (optional)"
-          placeholder="Only shown in connections if you add it"
+          placeholder="Only shown if you choose to share it"
           value={activeParent?.birthDate ?? ''}
           onChange={(birthDate) => {
             if (!activeParent) {

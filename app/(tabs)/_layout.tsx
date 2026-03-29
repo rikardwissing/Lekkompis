@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { useAppStore } from '@/store/app-store';
-import { getConversationThreads, getGroupAttentionCount, getUnreadConversationThreadCount } from '@/store/derived';
+import { getConversationThreads, getInboxAttentionCount, getPlansAttentionCount } from '@/store/derived';
 import { colors } from '@/theme/colors';
 
 type TabIconName = ComponentProps<typeof Ionicons>['name'];
@@ -22,40 +22,51 @@ export default function TabsLayout() {
   const draftProfile = useAppStore((state) => state.draftProfile);
   const directConversationLastSeenAtByParent = useAppStore((state) => state.directConversationLastSeenAtByParent);
   const matchedParentIdsByParent = useAppStore((state) => state.matchedParentIdsByParent);
+  const matchedAtByMatchId = useAppStore((state) => state.matchedAtByMatchId);
   const groupConversationLastSeenAtByParent = useAppStore((state) => state.groupConversationLastSeenAtByParent);
   const families = useAppStore((state) => state.families);
   const messagesByMatch = useAppStore((state) => state.messagesByMatch);
   const groupMessagesByPlayDate = useAppStore((state) => state.groupMessagesByPlayDate);
   const groupPlayDates = useAppStore((state) => state.groupPlayDates);
-  const groupAttentionCount = useMemo(
-    () => getGroupAttentionCount(groupPlayDates, currentFamilyId, draftProfile),
-    [currentFamilyId, draftProfile, groupPlayDates]
-  );
-  const unreadConversationCount = useMemo(
-    () =>
-      getUnreadConversationThreadCount(
-        getConversationThreads({
-          currentFamilyId,
-          draftProfile,
-          directConversationLastSeenAtByParent,
-          matchedParentIdsByParent,
-          groupConversationLastSeenAtByParent,
-          families,
-          messagesByMatch,
-          groupMessagesByPlayDate,
-          groupPlayDates,
-        })
-      ),
-    [
+  const inboxAttentionCount = useMemo(() => {
+    const threads = getConversationThreads({
       currentFamilyId,
-      directConversationLastSeenAtByParent,
       draftProfile,
-      families,
+      directConversationLastSeenAtByParent,
+      matchedParentIdsByParent,
+      matchedAtByMatchId,
       groupConversationLastSeenAtByParent,
+      families,
+      messagesByMatch,
       groupMessagesByPlayDate,
       groupPlayDates,
-      matchedParentIdsByParent,
-      messagesByMatch,
+    });
+
+    return getInboxAttentionCount(threads);
+  }, [
+    currentFamilyId,
+    directConversationLastSeenAtByParent,
+    draftProfile,
+    families,
+    groupConversationLastSeenAtByParent,
+    groupMessagesByPlayDate,
+    groupPlayDates,
+    matchedAtByMatchId,
+    matchedParentIdsByParent,
+    messagesByMatch,
+  ]);
+  const plansAttentionCount = useMemo(
+    () =>
+      getPlansAttentionCount({
+        currentFamilyId,
+        draftProfile,
+        groupPlayDates,
+      }),
+    [
+      currentFamilyId,
+      draftProfile,
+      families,
+      groupPlayDates,
     ]
   );
 
@@ -80,28 +91,33 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="matches"
-        options={{
-          title: 'Matches',
-          tabBarIcon: renderTabIcon('heart-outline', 'heart'),
-        }}
-      />
-      <Tabs.Screen
         name="inbox"
         options={{
           title: 'Inbox',
           tabBarIcon: renderTabIcon('chatbubble-ellipses-outline', 'chatbubble-ellipses'),
-          tabBarBadge: unreadConversationCount > 0 ? formatBadgeCount(unreadConversationCount) : undefined,
-          tabBarBadgeStyle: unreadConversationCount > 0 ? styles.tabBadge : undefined,
+          tabBarBadge: inboxAttentionCount > 0 ? formatBadgeCount(inboxAttentionCount) : undefined,
+          tabBarBadgeStyle: inboxAttentionCount > 0 ? styles.tabBadge : undefined,
+        }}
+      />
+      <Tabs.Screen
+        name="plans"
+        options={{
+          title: 'Plans',
+          tabBarIcon: renderTabIcon('calendar-clear-outline', 'calendar-clear'),
+          tabBarBadge: plansAttentionCount > 0 ? formatBadgeCount(plansAttentionCount) : undefined,
+          tabBarBadgeStyle: plansAttentionCount > 0 ? styles.tabBadge : undefined,
         }}
       />
       <Tabs.Screen
         name="groups"
         options={{
-          title: 'Groups',
-          tabBarIcon: renderTabIcon('calendar-clear-outline', 'calendar-clear'),
-          tabBarBadge: groupAttentionCount > 0 ? formatBadgeCount(groupAttentionCount) : undefined,
-          tabBarBadgeStyle: groupAttentionCount > 0 ? styles.tabBadge : undefined,
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="matches"
+        options={{
+          href: null,
         }}
       />
       <Tabs.Screen

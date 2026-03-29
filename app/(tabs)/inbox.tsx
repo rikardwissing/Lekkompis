@@ -4,8 +4,8 @@ import { router } from 'expo-router';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MainAppHeader } from '@/components/navigation/MainAppHeader';
 import { Avatar } from '@/components/ui/Avatar';
-import { Screen } from '@/components/ui/Screen';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Screen } from '@/components/ui/Screen';
 import { useAppStore, type ConversationThread } from '@/store/app-store';
 import {
   formatConversationActivity,
@@ -131,6 +131,7 @@ export default function InboxScreen() {
   const draftProfile = useAppStore((state) => state.draftProfile);
   const directConversationLastSeenAtByParent = useAppStore((state) => state.directConversationLastSeenAtByParent);
   const matchedParentIdsByParent = useAppStore((state) => state.matchedParentIdsByParent);
+  const matchedAtByMatchId = useAppStore((state) => state.matchedAtByMatchId);
   const groupConversationLastSeenAtByParent = useAppStore((state) => state.groupConversationLastSeenAtByParent);
   const families = useAppStore((state) => state.families);
   const messagesByMatch = useAppStore((state) => state.messagesByMatch);
@@ -144,6 +145,7 @@ export default function InboxScreen() {
         draftProfile,
         directConversationLastSeenAtByParent,
         matchedParentIdsByParent,
+        matchedAtByMatchId,
         groupConversationLastSeenAtByParent,
         families,
         messagesByMatch,
@@ -158,6 +160,7 @@ export default function InboxScreen() {
       groupConversationLastSeenAtByParent,
       groupMessagesByPlayDate,
       groupPlayDates,
+      matchedAtByMatchId,
       matchedParentIdsByParent,
       messagesByMatch,
     ]
@@ -198,16 +201,16 @@ export default function InboxScreen() {
       : activeFilter === 'direct'
         ? 'Direct chats'
         : activeFilter === 'groups'
-          ? 'Group plans'
+          ? 'Group threads'
           : 'Latest activity';
   const filterCaption =
     activeFilter === 'unread'
       ? 'Threads that still need your attention.'
       : activeFilter === 'direct'
-        ? 'One-to-one chats with matched parents.'
+        ? 'One-to-one chats and fresh mutual matches.'
         : activeFilter === 'groups'
-          ? 'Group plans and invitations in one stream.'
-          : 'One running list, newest message first. Unread threads stay highlighted.';
+          ? 'Group chats and pending invitations.'
+          : 'All fresh matches, direct chats, and group conversations, newest activity first.';
 
   return (
     <Screen
@@ -219,7 +222,7 @@ export default function InboxScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.title}>Inbox</Text>
-        <Text style={styles.subtitle}>Your direct parent chats and shared family group threads stay together here once plans start moving.</Text>
+        <Text style={styles.subtitle}>Mutual matches, direct chats, and group threads stay together here once things start moving.</Text>
       </View>
 
       {threads.length > 0 ? (
@@ -235,7 +238,7 @@ export default function InboxScreen() {
             <ConversationFilterCard
               active={activeFilter === 'direct'}
               count={directThreadCount}
-              description="1:1 chats"
+              description="Direct chats"
               label="Direct"
               onPress={() => toggleFilter('direct')}
             />
@@ -254,9 +257,7 @@ export default function InboxScreen() {
             </View>
             {activeFilter !== 'unread' && unreadThreadCount > 0 ? (
               <View style={styles.unreadPill}>
-                <Text style={styles.unreadPillText}>
-                  {unreadThreadCount} unread
-                </Text>
+                <Text style={styles.unreadPillText}>{unreadThreadCount} unread</Text>
               </View>
             ) : null}
           </View>
@@ -273,14 +274,16 @@ export default function InboxScreen() {
             </View>
           )}
         </View>
-      ) : (
+      ) : null}
+
+      {threads.length === 0 ? (
         <EmptyState
-          title="No conversations yet"
-          body="Start a direct chat from a mutual match or open a group invite and your inbox will begin filling up here."
-          actionLabel="Open groups"
-          onAction={() => router.push('/(tabs)/groups')}
+          title="Nothing in inbox yet"
+          body="Browse nearby parents or public events, and this is where new mutual matches and conversations will start to show up."
+          actionLabel="Open discover"
+          onAction={() => router.push('/(tabs)/discover')}
         />
-      )}
+      ) : null}
     </Screen>
   );
 }
@@ -358,8 +361,7 @@ const styles = StyleSheet.create({
   },
   listIntro: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: spacing.md,
   },
   listIntroCopy: {
@@ -367,15 +369,15 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   sectionCaption: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
     color: colors.textMuted,
   },
   unreadPill: {
     borderRadius: radius.pill,
     backgroundColor: colors.primarySoft,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   unreadPillText: {
     fontSize: 12,
@@ -383,26 +385,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   listStack: {
-    gap: spacing.sm,
-  },
-  filteredEmptyState: {
-    gap: spacing.xs,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  filteredEmptyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  filteredEmptyBody: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textMuted,
+    gap: spacing.md,
   },
   avatarStack: {
     flexDirection: 'row',
@@ -411,29 +394,10 @@ const styles = StyleSheet.create({
   avatarStackItem: {
     borderRadius: radius.pill,
     borderWidth: 2,
-    borderColor: colors.surface,
-    overflow: 'hidden',
+    borderColor: colors.background,
   },
   avatarOverlap: {
-    marginLeft: -spacing.sm,
-  },
-  threadRow: {
-    gap: spacing.sm,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  threadPrimaryRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  threadRowUnread: {
-    borderColor: colors.primarySoft,
-    backgroundColor: '#FCFEFC',
+    marginLeft: -12,
   },
   avatarOverflow: {
     width: 42,
@@ -443,110 +407,133 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted,
   },
   avatarOverflowText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    color: colors.secondary,
+    color: colors.textMuted,
+  },
+  threadRow: {
+    gap: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.xl,
+  },
+  threadRowUnread: {
+    borderColor: colors.primarySoft,
+    backgroundColor: '#FCFEFC',
+  },
+  threadPrimaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   threadCopy: {
     flex: 1,
     gap: spacing.xs,
-    minWidth: 0,
   },
   threadHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     gap: spacing.md,
   },
   threadHeaderMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: spacing.xs,
-    flexShrink: 0,
+  },
+  threadTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  threadTitleUnread: {
+    color: colors.primary,
+  },
+  threadTime: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  threadTimeUnread: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  unreadBadge: {
+    minWidth: 24,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    alignItems: 'center',
+  },
+  unreadBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.surface,
   },
   threadMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    minWidth: 0,
-    overflow: 'hidden',
-  },
-  threadTitle: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  threadTitleUnread: {
-    fontWeight: '700',
   },
   threadBadge: {
     borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
   directBadge: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: '#E7F4EA',
   },
   groupBadge: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: '#F2ECFF',
   },
   pendingBadge: {
-    backgroundColor: colors.accentSoft,
+    backgroundColor: colors.primarySoft,
   },
   threadBadgeText: {
     fontSize: 12,
     fontWeight: '700',
   },
   directBadgeText: {
-    color: colors.secondary,
-  },
-  groupBadgeText: {
     color: colors.primary,
   },
+  groupBadgeText: {
+    color: '#6A4FBF',
+  },
   pendingBadgeText: {
-    color: colors.accent,
+    color: colors.primary,
+  },
+  threadSubtitleWrap: {
+    flex: 1,
   },
   threadSubtitle: {
     fontSize: 13,
     color: colors.textMuted,
-    flexShrink: 1,
-  },
-  threadSubtitleWrap: {
-    flex: 1,
-    minWidth: 0,
-    overflow: 'hidden',
   },
   threadPreview: {
     fontSize: 14,
     lineHeight: 20,
     color: colors.textMuted,
-    paddingTop: spacing.xs,
   },
   threadPreviewUnread: {
     color: colors.text,
   },
-  threadTime: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
+  filteredEmptyState: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.xl,
+    gap: spacing.sm,
   },
-  threadTimeUnread: {
+  filteredEmptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     color: colors.text,
   },
-  unreadBadge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unreadBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.surface,
+  filteredEmptyBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textMuted,
   },
 });

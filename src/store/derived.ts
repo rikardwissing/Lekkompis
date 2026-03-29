@@ -39,10 +39,26 @@ type ConversationThreadInput = {
   draftProfile: DraftProfile;
   directConversationLastSeenAtByParent: Record<string, Record<string, number>>;
   matchedParentIdsByParent: Record<string, string[]>;
+  matchedAtByMatchId: Record<string, number>;
   groupConversationLastSeenAtByParent: Record<string, Record<string, number>>;
   families: Family[];
   messagesByMatch: Record<string, Message[]>;
   groupMessagesByPlayDate: Record<string, Message[]>;
+  groupPlayDates: GroupPlayDate[];
+};
+
+type PlansInput = {
+  currentFamilyId: string;
+  draftProfile: DraftProfile;
+  groupPlayDates: GroupPlayDate[];
+};
+
+type LinkedParentOverviewInput = {
+  currentFamilyId: string;
+  draftProfile: DraftProfile;
+  matchedParentIdsByParent: Record<string, string[]>;
+  families: Family[];
+  messagesByMatch: Record<string, Message[]>;
   groupPlayDates: GroupPlayDate[];
 };
 
@@ -62,13 +78,78 @@ export type BirthdayEvent = {
   daysUntil: number;
 };
 
+export type PlansItem = {
+  id: string;
+  kind: 'private' | 'public';
+  title: string;
+  subtitle: string;
+  statusLabel: string;
+  note: string;
+  route: string;
+  attention: boolean;
+  upcoming: boolean;
+  hosting: boolean;
+  sortValue: number;
+};
+
+export type LinkedParentOverview = {
+  parentId: string;
+  parentName: string;
+  mutualMatches: Array<{ id: string; name: string }>;
+  directChats: Array<{ id: string; name: string; lastActivityAt: number }>;
+  plans: Array<{ id: string; title: string; status: string }>;
+};
+
 const unique = (values: string[]) => [...new Set(values)];
+const MONTH_LOOKUP = {
+  Jan: 0,
+  Feb: 1,
+  Mar: 2,
+  Apr: 3,
+  May: 4,
+  Jun: 5,
+  Jul: 6,
+  Aug: 7,
+  Sep: 8,
+  Oct: 9,
+  Nov: 10,
+  Dec: 11,
+} satisfies Record<string, number>;
 
 const getFamilyPublicParent = (family: Family) => getPrimaryParent(family);
 const getCurrentDiscoveryParent = (draftProfile: DraftProfile) => getActiveParent(draftProfile) ?? getPrimaryParent(draftProfile);
 const getSharedValues = (left: string[] = [], right: string[] = []) => {
   const rightSet = new Set(right);
   return left.filter((value) => rightSet.has(value));
+};
+const resolveParentEntry = (families: Family[], parentId: string) => {
+  const family = getFamilyByParentId(families, parentId);
+  const parent = family?.parents.find((entry) => entry.id === parentId) ?? null;
+
+  if (!family || !parent) {
+    return null;
+  }
+
+  return { family, parent };
+};
+const parseScheduleSortValue = (dateLabel: string, fallback = Number.POSITIVE_INFINITY) => {
+  const match = dateLabel.match(/^[A-Za-z]{3}\s+(\d{1,2})\s+([A-Za-z]{3})$/);
+
+  if (!match) {
+    return fallback;
+  }
+
+  const [, dayToken, monthToken] = match;
+  const month = MONTH_LOOKUP[monthToken as keyof typeof MONTH_LOOKUP];
+  const day = Number.parseInt(dayToken, 10);
+
+  if (month === undefined || Number.isNaN(day)) {
+    return fallback;
+  }
+
+  const today = new Date();
+  const candidate = new Date(today.getFullYear(), month, day, 12).getTime();
+  return candidate >= today.getTime() ? candidate : new Date(today.getFullYear() + 1, month, day, 12).getTime();
 };
 
 export const buildConversationPreview = (
@@ -234,7 +315,7 @@ export const getGroupAudienceLabel = ({
 }: {
   ageRange?: string;
   audience: GroupPlayDateAudience;
-}) => (audience === 'expecting' ? 'Expecting parents' : ageRange ?? 'Families with children');
+}) => (audience === 'mixed' ? 'Private meetup' : audience === 'expecting' ? 'Expecting parents' : ageRange ?? 'Families with children');
 
 export const getUpcomingBirthdayEventsForFamily = (family: Family, today = new Date(), windowDays = 30) => {
   const familyParent = getFamilyPublicParent(family);
@@ -297,7 +378,7 @@ export const isGroupFull = (groupPlayDate: GroupPlayDate) =>
   groupPlayDate.attendeeFamilyIds.length >= groupPlayDate.capacity;
 
 export const isGroupSharedWithParent = (groupPlayDate: GroupPlayDate, parentId?: string | null) =>
-  Boolean(parentId && groupPlayDate.includedParentIds.includes(parentId));
+  Boolean(parentId && groupPlayDate.accessibleParentIds.includes(parentId));
 
 export const isGroupSharedWithActiveParent = (groupPlayDate: GroupPlayDate, draftProfile: DraftProfile) =>
   isGroupSharedWithParent(groupPlayDate, getActiveParent(draftProfile)?.id);
@@ -307,16 +388,19 @@ export const canActiveParentViewGroup = (groupPlayDate: GroupPlayDate, draftProf
 
 export const getPrivateInvitations = (
   groupPlayDates: GroupPlayDate[],
-  currentFamilyId: string,
   draftProfile: DraftProfile
 ) =>
-  groupPlayDates.filter(
-    (groupPlayDate) =>
+  groupPlayDates.filter((groupPlayDate) => {
+    const activeParentId = getActiveParent(draftProfile)?.id;
+
+    return (
+      Boolean(activeParentId) &&
       isGroupSharedWithActiveParent(groupPlayDate, draftProfile) &&
       groupPlayDate.visibility === 'private' &&
       groupPlayDate.membership === 'invited' &&
-      groupPlayDate.invitedFamilyIds.includes(currentFamilyId)
-  );
+      groupPlayDate.invitedParentIds.includes(activeParentId)
+    );
+  });
 
 export const getHostedRequestGroups = (
   groupPlayDates: GroupPlayDate[],
@@ -328,7 +412,7 @@ export const getHostedRequestGroups = (
       isGroupSharedWithActiveParent(groupPlayDate, draftProfile) &&
       groupPlayDate.visibility === 'public' &&
       groupPlayDate.hostFamilyId === currentFamilyId &&
-      groupPlayDate.pendingRequestFamilyIds.length > 0
+      groupPlayDate.pendingRequestParentIds.length > 0
   );
 
 export const getPendingGroupJoinRequestCount = (
@@ -337,7 +421,7 @@ export const getPendingGroupJoinRequestCount = (
   draftProfile: DraftProfile
 ) =>
   getHostedRequestGroups(groupPlayDates, currentFamilyId, draftProfile).reduce(
-    (count, groupPlayDate) => count + groupPlayDate.pendingRequestFamilyIds.length,
+    (count, groupPlayDate) => count + groupPlayDate.pendingRequestParentIds.length,
     0
   );
 
@@ -346,7 +430,7 @@ export const getGroupAttentionCount = (
   currentFamilyId: string,
   draftProfile: DraftProfile
 ) =>
-  getPrivateInvitations(groupPlayDates, currentFamilyId, draftProfile).length +
+  getPrivateInvitations(groupPlayDates, draftProfile).length +
   getPendingGroupJoinRequestCount(groupPlayDates, currentFamilyId, draftProfile);
 
 export const getUpcomingGroups = (groupPlayDates: GroupPlayDate[], draftProfile: DraftProfile) =>
@@ -375,6 +459,7 @@ export const getDiscoverablePublicEvents = ({
     }))
     .filter(({ groupPlayDate }) => {
       if (groupPlayDate.visibility !== 'public') return false;
+      if (groupPlayDate.audience === 'mixed') return false;
       if (groupPlayDate.hostFamilyId === currentFamilyId) return false;
       if (groupPlayDate.membership !== 'none' && groupPlayDate.membership !== 'requested') return false;
       if (!canParticipateInAudience(draftProfile, groupPlayDate.audience)) return false;
@@ -413,6 +498,7 @@ export const getConversationThreads = ({
   draftProfile,
   directConversationLastSeenAtByParent,
   matchedParentIdsByParent,
+  matchedAtByMatchId,
   groupConversationLastSeenAtByParent,
   families,
   messagesByMatch,
@@ -476,7 +562,7 @@ export const getConversationThreads = ({
     const matchId = buildDirectMatchId(activeParent.id, remoteParentId);
     const messages = messagesByMatch[matchId] ?? [];
 
-    if (!family || !remoteParent || messages.length === 0) {
+    if (!family || !remoteParent) {
       return threadsAccumulator;
     }
 
@@ -489,12 +575,14 @@ export const getConversationThreads = ({
     threadsAccumulator.push({
       id: matchId,
       kind: 'direct',
+      isNewMatch: messages.length === 0,
       title: remoteParent.firstName,
       subtitle: getFamilyChildrenSummary(family.children ?? [], family.expecting),
-      lastMessagePreview: buildConversationPreview(lastMessage),
-      lastActivityAt: lastMessage.createdAt,
+      lastMessagePreview:
+        messages.length > 0 ? buildConversationPreview(lastMessage) : 'Mutual match - start the conversation.',
+      lastActivityAt: messages.length > 0 ? lastMessage.createdAt : matchedAtByMatchId[matchId] ?? 0,
       route: `/chat/${matchId}`,
-      badgeLabel: 'Direct',
+      badgeLabel: messages.length > 0 ? 'Direct' : 'New match',
       badgeTone: 'direct',
       avatarNames: [remoteParent.firstName],
       avatarUrls: remoteParent.avatarUrl ? [remoteParent.avatarUrl] : [],
@@ -513,7 +601,8 @@ export const getConversationThreads = ({
           groupPlayDate.membership === 'going' ||
           (groupPlayDate.visibility === 'private' &&
             groupPlayDate.membership === 'invited' &&
-            groupPlayDate.invitedFamilyIds.includes(currentFamilyId)))
+            Boolean(activeParent?.id) &&
+            groupPlayDate.invitedParentIds.includes(activeParent.id)))
     )
     .map<ConversationThread>((groupPlayDate) => {
       const messages = groupMessagesByPlayDate[groupPlayDate.id] ?? [];
@@ -521,7 +610,8 @@ export const getConversationThreads = ({
       const isPendingInvite =
         groupPlayDate.visibility === 'private' &&
         groupPlayDate.membership === 'invited' &&
-        groupPlayDate.invitedFamilyIds.includes(currentFamilyId);
+        Boolean(activeParent?.id) &&
+        groupPlayDate.invitedParentIds.includes(activeParent.id);
       const lastSeenAt = activeParent
         ? groupConversationLastSeenAtByParent[activeParent.id]?.[groupPlayDate.id] ?? 0
         : 0;
@@ -549,6 +639,7 @@ export const getConversationThreads = ({
       return {
         id: groupPlayDate.id,
         kind: 'group' as const,
+        isNewMatch: false,
         title: groupPlayDate.title,
         subtitle: isPendingInvite
           ? `Invitation pending - ${groupPlayDate.dateLabel} - ${groupPlayDate.locationName}`
@@ -579,3 +670,197 @@ export const getConversationThreads = ({
 
 export const getUnreadConversationThreadCount = (threads: ConversationThread[]) =>
   threads.filter((thread) => thread.unreadCount > 0).length;
+
+export const getInboxAttentionCount = (threads: ConversationThread[]) =>
+  getUnreadConversationThreadCount(threads) + threads.filter((thread) => thread.isNewMatch).length;
+
+const getGroupPlanStatusLabel = ({
+  currentFamilyId,
+  groupPlayDate,
+  parentId,
+}: {
+  currentFamilyId: string;
+  groupPlayDate: GroupPlayDate;
+  parentId?: string;
+}) => {
+  const isPendingInvite =
+    groupPlayDate.visibility === 'private' &&
+    groupPlayDate.membership === 'invited' &&
+    (parentId ? groupPlayDate.invitedParentIds.includes(parentId) : false);
+  const isRequested =
+    groupPlayDate.visibility === 'public' &&
+    groupPlayDate.membership === 'requested' &&
+    (parentId ? groupPlayDate.pendingRequestParentIds.includes(parentId) : false);
+
+  if (isPendingInvite) {
+    return 'Invitation pending';
+  }
+
+  if (groupPlayDate.membership === 'hosting') {
+    return groupPlayDate.hostParentId === parentId ? 'Hosting' : 'Shared host access';
+  }
+
+  if (groupPlayDate.membership === 'going') {
+    return 'Going';
+  }
+
+  if (isRequested) {
+    return 'Request sent';
+  }
+
+  if (groupPlayDate.hostFamilyId === currentFamilyId && groupPlayDate.pendingRequestParentIds.length > 0) {
+    return 'Needs review';
+  }
+
+  return groupPlayDate.visibility === 'public' ? 'Public plan' : 'Private plan';
+};
+
+export const getPlansItems = ({
+  currentFamilyId,
+  draftProfile,
+  groupPlayDates,
+}: PlansInput): PlansItem[] => {
+  const activeParent = getActiveParent(draftProfile);
+
+  return groupPlayDates
+    .flatMap<PlansItem>((groupPlayDate) => {
+      const activeParentId = activeParent?.id;
+      const isPendingInvite =
+        groupPlayDate.visibility === 'private' &&
+        groupPlayDate.membership === 'invited' &&
+        Boolean(activeParentId) &&
+        groupPlayDate.invitedParentIds.includes(activeParentId);
+      const isRequested =
+        groupPlayDate.visibility === 'public' &&
+        groupPlayDate.membership === 'requested' &&
+        Boolean(activeParentId) &&
+        groupPlayDate.pendingRequestParentIds.includes(activeParentId);
+      const canSee =
+        Boolean(activeParentId) &&
+        groupPlayDate.accessibleParentIds.includes(activeParentId) &&
+        (groupPlayDate.membership === 'hosting' || groupPlayDate.membership === 'going' || isPendingInvite || isRequested);
+
+      if (!canSee) {
+        return [];
+      }
+
+      const hosting = groupPlayDate.hostFamilyId === currentFamilyId;
+      const attention = isPendingInvite || (hosting && groupPlayDate.pendingRequestParentIds.length > 0);
+
+      return [
+        {
+          id: groupPlayDate.id,
+          kind: groupPlayDate.visibility,
+          title: groupPlayDate.title,
+          subtitle: `${groupPlayDate.dateLabel} · ${groupPlayDate.locationName}`,
+          statusLabel: getGroupPlanStatusLabel({
+            currentFamilyId,
+            groupPlayDate,
+            parentId: activeParentId,
+          }),
+          note: groupPlayDate.note,
+          route: `/group/${groupPlayDate.id}`,
+          attention,
+          upcoming: groupPlayDate.membership === 'hosting' || groupPlayDate.membership === 'going',
+          hosting,
+          sortValue: parseScheduleSortValue(groupPlayDate.dateLabel, groupPlayDate.createdAt),
+        },
+      ];
+    })
+    .sort((left, right) => left.sortValue - right.sortValue || left.title.localeCompare(right.title));
+};
+
+export const getPlansAttentionCount = ({ currentFamilyId, draftProfile, groupPlayDates }: PlansInput) =>
+  getGroupAttentionCount(groupPlayDates, currentFamilyId, draftProfile);
+
+export const getLinkedParentOverview = ({
+  currentFamilyId,
+  draftProfile,
+  matchedParentIdsByParent,
+  families,
+  messagesByMatch,
+  groupPlayDates,
+}: LinkedParentOverviewInput): LinkedParentOverview[] => {
+  const activeParent = getActiveParent(draftProfile);
+
+  return draftProfile.parents
+    .filter((parent) => parent.status === 'active' && parent.id !== activeParent?.id)
+    .map((parent) => {
+      const matchedParentIds = matchedParentIdsByParent[parent.id] ?? [];
+
+      const mutualMatches = matchedParentIds
+        .map((remoteParentId) => {
+          const entry = resolveParentEntry(families, remoteParentId);
+
+          if (!entry) {
+            return null;
+          }
+
+          const matchId = buildDirectMatchId(parent.id, remoteParentId);
+          const messages = messagesByMatch[matchId] ?? [];
+
+          if (messages.length > 0) {
+            return null;
+          }
+
+          return {
+            id: matchId,
+            name: entry.parent.firstName,
+          };
+        })
+        .filter((item): item is { id: string; name: string } => Boolean(item));
+
+      const directChats = matchedParentIds
+        .map((remoteParentId) => {
+          const entry = resolveParentEntry(families, remoteParentId);
+
+          if (!entry) {
+            return null;
+          }
+
+          const matchId = buildDirectMatchId(parent.id, remoteParentId);
+          const messages = messagesByMatch[matchId] ?? [];
+          const lastActivityAt = messages[messages.length - 1]?.createdAt;
+
+          if (!lastActivityAt) {
+            return null;
+          }
+
+          return {
+            id: matchId,
+            name: entry.parent.firstName,
+            lastActivityAt,
+          };
+        })
+        .filter((item): item is { id: string; name: string; lastActivityAt: number } => Boolean(item))
+        .sort((left, right) => right.lastActivityAt - left.lastActivityAt);
+
+      const plans = groupPlayDates
+        .filter(
+          (groupPlayDate) =>
+            groupPlayDate.accessibleParentIds.includes(parent.id) &&
+            groupPlayDate.membership !== 'none' &&
+            (groupPlayDate.membership !== 'invited' || groupPlayDate.invitedParentIds.includes(parent.id))
+        )
+        .map((groupPlayDate) => ({
+          id: groupPlayDate.id,
+          title: groupPlayDate.title,
+          status: getGroupPlanStatusLabel({
+            currentFamilyId,
+            groupPlayDate,
+            parentId: parent.id,
+          }),
+          sortValue: parseScheduleSortValue(groupPlayDate.dateLabel, groupPlayDate.createdAt),
+        }))
+        .sort((left, right) => left.sortValue - right.sortValue || left.title.localeCompare(right.title))
+        .map(({ sortValue: _sortValue, ...plan }) => plan);
+
+      return {
+        parentId: parent.id,
+        parentName: parent.firstName,
+        mutualMatches,
+        directChats,
+        plans,
+      };
+    });
+};

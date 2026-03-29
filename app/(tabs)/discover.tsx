@@ -421,9 +421,9 @@ export default function DiscoverScreen() {
           }
         : {
             title: 'No more parents to review right now',
-            body: 'Your current likes and matches have moved on to Matches. You can keep browsing later or review the parents you already connected with there.',
-            actionLabel: 'Open matches',
-            onAction: () => router.push('/(tabs)/matches'),
+            body: 'Your current likes and mutual matches now flow into Inbox. You can keep browsing later or open Inbox to start the conversations that are ready.',
+            actionLabel: 'Open inbox',
+            onAction: () => router.push('/(tabs)/inbox'),
           },
     [resetDiscoveryFilters, visibleParentEntries.length]
   );
@@ -434,6 +434,13 @@ export default function DiscoverScreen() {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
+      <View style={styles.eventsHeader}>
+        <View style={styles.eventsHeaderCopy}>
+          <Text style={styles.eventsTitle}>Public events</Text>
+          <Text style={styles.eventsBody}>Browse open meetups nearby or host a new plan when you want to bring parents together.</Text>
+        </View>
+        <Button label="Host plan" variant="secondary" onPress={() => router.push('/plan/create')} />
+      </View>
       {visiblePublicEvents.length === 0 ? (
         <EmptyState
           title="No public events match these filters"
@@ -446,10 +453,11 @@ export default function DiscoverScreen() {
           const host = familyById[groupPlayDate.hostFamilyId];
           const isRequestedByThisParent =
             groupPlayDate.membership === 'requested' &&
-            groupPlayDate.includedParentIds.includes(draftProfile.activeParentId);
+            groupPlayDate.pendingRequestParentIds.includes(draftProfile.activeParentId);
           const isRequestedByLinkedParent =
             groupPlayDate.membership === 'requested' &&
-            !groupPlayDate.includedParentIds.includes(draftProfile.activeParentId);
+            !groupPlayDate.pendingRequestParentIds.includes(draftProfile.activeParentId) &&
+            groupPlayDate.pendingRequestParentIds.length > 0;
           const isFull = isGroupFull(groupPlayDate);
 
           return (
@@ -737,7 +745,7 @@ export default function DiscoverScreen() {
               </View>
             </View>
             <Text style={styles.matchBody}>
-              This match now lives in Matches, where you can jump into chat or keep browsing first.
+              This match is now waiting in Inbox, where you can start the chat right away or keep browsing first.
             </Text>
             <View style={styles.matchActions}>
               <View style={styles.flex}>
@@ -745,10 +753,10 @@ export default function DiscoverScreen() {
               </View>
               <View style={styles.flex}>
                 <Button
-                  label="Open matches"
+                  label="Open inbox"
                   onPress={() => {
                     setMatchOverlayParentId(null);
-                    router.push('/(tabs)/matches');
+                    router.push('/(tabs)/inbox');
                   }}
                 />
               </View>
@@ -870,6 +878,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxxl,
     gap: spacing.lg,
+  },
+  eventsHeader: {
+    gap: spacing.md,
+  },
+  eventsHeaderCopy: {
+    gap: spacing.xs,
+  },
+  eventsTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  eventsBody: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.textMuted,
   },
   filters: {
     flexDirection: 'row',

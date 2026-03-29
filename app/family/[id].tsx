@@ -11,7 +11,6 @@ import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   getActiveMatchedFamilyIds,
-  getLinkedParentMatchedFamilyIds,
   getPrimaryParent,
   useAppStore,
 } from '@/store/app-store';
@@ -39,7 +38,6 @@ export default function FamilyDetailScreen() {
   const family = families.find((item) => item.id === id);
   const familyPrimaryParent = family ? getPrimaryParent(family) : null;
   const matchedFamilyIds = getActiveMatchedFamilyIds(draftProfile, matchedParentIdsByParent, families);
-  const linkedParentMatchedFamilyIds = getLinkedParentMatchedFamilyIds(draftProfile, matchedParentIdsByParent, families);
   const headerTitleOpacity = scrollY.interpolate({
     inputRange: [24, 92],
     outputRange: [0, 1],
@@ -71,7 +69,6 @@ export default function FamilyDetailScreen() {
   const fitChips = getFamilyFitChips(draftProfile, family);
   const distanceLabel = getFamilyDistanceLabel(draftProfile, family);
   const discoverableParents = family.parents.filter((parent) => parent.isDiscoverable);
-  const sharedConnectionAvailable = !isMatched && linkedParentMatchedFamilyIds.includes(family.id);
 
   return (
     <Screen
@@ -170,16 +167,11 @@ export default function FamilyDetailScreen() {
         </View>
         <Text style={styles.sectionTitle}>First meetup tone</Text>
         <Text style={styles.body}>{family.meetupNote}</Text>
-        {sharedConnectionAvailable ? (
-          <Text style={styles.sharedConnectionNote}>
-            {familyPrimaryParent?.firstName ?? 'This parent'} is already connected with another linked parent in your family. Add them to your own account to join the direct thread as yourself.
-          </Text>
-        ) : null}
       </Card>
       <View style={styles.actions}>
         {discoverableParents.length > 0 ? (
           <Button
-            label={sharedConnectionAvailable ? 'Open discoverable parent' : 'View discoverable parent'}
+            label="View discoverable parent"
             onPress={() => router.push(`/parent/${discoverableParents[0].id}`)}
           />
         ) : null}
@@ -237,10 +229,5 @@ const styles = StyleSheet.create({
   },
   actions: {
     gap: spacing.md,
-  },
-  sharedConnectionNote: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.primary,
   },
 });

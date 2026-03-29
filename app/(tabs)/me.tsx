@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MainAppHeader } from '@/components/navigation/MainAppHeader';
@@ -14,6 +14,7 @@ import {
   isPrimaryActiveParent,
   useAppStore,
 } from '@/store/app-store';
+import { formatConversationActivity, getLinkedParentOverview } from '@/store/derived';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { formatAgeLabelFromBirthDate, formatDateOnly, formatDueMonthLabel } from '@/utils/birthdays';
@@ -21,7 +22,12 @@ import { getPrivateLocationLabel } from '@/utils/location';
 
 export default function MeScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
+  const currentFamilyId = useAppStore((state) => state.currentFamilyId);
   const draftProfile = useAppStore((state) => state.draftProfile);
+  const families = useAppStore((state) => state.families);
+  const matchedParentIdsByParent = useAppStore((state) => state.matchedParentIdsByParent);
+  const messagesByMatch = useAppStore((state) => state.messagesByMatch);
+  const groupPlayDates = useAppStore((state) => state.groupPlayDates);
   const coParentInvite = useAppStore((state) => state.coParentInvite);
   const setActiveParent = useAppStore((state) => state.setActiveParent);
   const createCoParentInvite = useAppStore((state) => state.createCoParentInvite);
@@ -34,6 +40,18 @@ export default function MeScreen() {
   const primarySession = isPrimaryActiveParent(draftProfile);
   const linkedParents = draftProfile.parents.filter((parent) => parent.status === 'active');
   const coParent = linkedParents.find((parent) => parent.role === 'coparent');
+  const linkedParentOverview = useMemo(
+    () =>
+      getLinkedParentOverview({
+        currentFamilyId,
+        draftProfile,
+        matchedParentIdsByParent,
+        families,
+        messagesByMatch,
+        groupPlayDates,
+      }),
+    [currentFamilyId, draftProfile, families, groupPlayDates, matchedParentIdsByParent, messagesByMatch]
+  );
   const headerTitleOpacity = scrollY.interpolate({
     inputRange: [24, 92],
     outputRange: [0, 1],
@@ -73,7 +91,7 @@ export default function MeScreen() {
       <Card>
         <Text style={styles.sectionTitle}>Parent access</Text>
         <Text style={styles.body}>
-          Shared groups, invites, hosting, and group chat stay available to both parents. Each linked parent can also build their own likes, matches, and direct chats while still seeing the other parent’s connections.
+          Each linked parent builds their own likes, mutual matches, and direct chats. Planning now lives entirely in shared group plans.
         </Text>
         <Text style={styles.metaLabel}>Switch active parent</Text>
         <View style={styles.row}>
@@ -111,7 +129,7 @@ export default function MeScreen() {
       <Card>
         <Text style={styles.sectionTitle}>Co-parent connection</Text>
         <Text style={styles.body}>
-          Link a co-parent account to share group planning and let each parent build their own direct connections inside the same family account.
+          Link a co-parent account to share family planning while keeping each parent’s direct matching separate.
         </Text>
 
         <View style={styles.parentStack}>
@@ -152,6 +170,65 @@ export default function MeScreen() {
                 <Button label="Accept as Lukas" onPress={acceptPendingCoParentInvite} />
               </View>
             </View>
+          </View>
+        ) : null}
+
+        {linkedParentOverview.length > 0 ? (
+          <View style={styles.overviewStack}>
+            <Text style={styles.metaLabel}>Linked parent overview</Text>
+            <Text style={styles.body}>
+              This is read-only awareness so you can see what your linked parent already has in motion without importing any of it into your own account.
+            </Text>
+            {linkedParentOverview.map((overview) => (
+              <View key={overview.parentId} style={styles.overviewCard}>
+                <Text style={styles.overviewTitle}>{overview.parentName}'s connections</Text>
+
+                <View style={styles.overviewSection}>
+                  <Text style={styles.overviewSectionTitle}>Mutual matches</Text>
+                  {overview.mutualMatches.length > 0 ? (
+                    <View style={styles.row}>
+                      {overview.mutualMatches.map((match) => (
+                        <Chip key={match.id} label={match.name} />
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.meta}>No mutual matches yet.</Text>
+                  )}
+                </View>
+
+                <View style={styles.overviewSection}>
+                  <Text style={styles.overviewSectionTitle}>Direct chats</Text>
+                  {overview.directChats.length > 0 ? (
+                    <View style={styles.overviewList}>
+                      {overview.directChats.map((chat) => (
+                        <View key={chat.id} style={styles.overviewItem}>
+                          <Text style={styles.overviewItemTitle}>{chat.name}</Text>
+                          <Text style={styles.meta}>Latest activity {formatConversationActivity(chat.lastActivityAt)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.meta}>No active direct chats yet.</Text>
+                  )}
+                </View>
+
+                <View style={styles.overviewSection}>
+                  <Text style={styles.overviewSectionTitle}>Plans</Text>
+                  {overview.plans.length > 0 ? (
+                    <View style={styles.overviewList}>
+                      {overview.plans.map((plan) => (
+                        <View key={plan.id} style={styles.overviewItem}>
+                          <Text style={styles.overviewItemTitle}>{plan.title}</Text>
+                          <Text style={styles.meta}>{plan.status}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.meta}>No active plans yet.</Text>
+                  )}
+                </View>
+              </View>
+            ))}
           </View>
         ) : null}
       </Card>
@@ -267,6 +344,39 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: colors.surfaceMuted,
     padding: spacing.md,
+  },
+  overviewStack: {
+    gap: spacing.md,
+  },
+  overviewCard: {
+    gap: spacing.md,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceMuted,
+    padding: spacing.md,
+  },
+  overviewTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  overviewSection: {
+    gap: spacing.sm,
+  },
+  overviewSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  overviewList: {
+    gap: spacing.sm,
+  },
+  overviewItem: {
+    gap: spacing.xs,
+  },
+  overviewItemTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
   },
   inviteCode: {
     fontSize: 22,
